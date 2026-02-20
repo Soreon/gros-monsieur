@@ -378,7 +378,7 @@
 /* Red delete button revealed on swipe-left */
 .set-row-delete {
   position: absolute;
-  right: 0; top: 0; bottom: 0;
+  right: -1px; top: 0; bottom: 0;
   width: 72px;
   background: var(--danger, #e55353);
   border: none;
@@ -398,6 +398,8 @@
  * Will-change improves GPU compositing during swipe.
  */
 .session-set-row {
+  position: relative;
+  z-index: 1;            /* empile la ligne au-dessus du bouton delete absolu */
   will-change: transform;
   background: var(--bg);  /* fond opaque pour masquer le bouton delete derrière */
   display: flex;
