@@ -378,7 +378,7 @@
 /* Red delete button revealed on swipe-left */
 .set-row-delete {
   position: absolute;
-  right: -1px; top: 0; bottom: 0;
+  right: 1px; top: 1px; bottom: 1px;
   width: 72px;
   background: var(--danger, #e55353);
   border: none;
