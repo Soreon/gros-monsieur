@@ -1,1 +1,473 @@
-/* historique.css — styles page */
+/* ============================================================
+   HISTORIQUE — Gros Monsieur
+   Page historique des séances : liste, vue détail, badges PR
+   Depends on: css/variables.css, css/layout.css, css/components.css
+   ============================================================ */
+
+
+/* ============================================================
+   1. EN-TETE DE MOIS (sticky section header)
+   ============================================================ */
+
+/**
+ * Bandeau collant qui sépare les séances par mois.
+ * Reste visible pendant le défilement, juste en dessous du header de page.
+ */
+.hist-month {
+  position: sticky;
+  top: var(--page-header-height, 56px);
+  z-index: var(--z-sticky, 2);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+
+  padding: var(--space-1) 0;
+  margin-bottom: var(--space-2);
+
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+/* "Février 2026" */
+.hist-month__label {
+  font-size: var(--text-sm);
+  font-weight: var(--fw-bold);
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* Badge "3 séances" */
+.hist-month__count {
+  font-size: var(--text-xs);
+  font-weight: var(--fw-semi);
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+
+/* ============================================================
+   2. LISTE DES SEANCES — groupe mensuel
+   ============================================================ */
+
+.hist-month-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-3);
+}
+
+.hist-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+
+/* ============================================================
+   3. CARTE DE SEANCE (.hist-card)
+   ============================================================ */
+
+/**
+ * Carte cliquable représentant une séance terminée.
+ * Bord gauche coloré = indicateur visuel rapide.
+ */
+.hist-card {
+  position: relative;
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  padding: var(--space-3) var(--space-4);
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--duration-fast) var(--ease),
+    transform var(--duration-fast) var(--ease),
+    opacity var(--duration-fast) var(--ease);
+  box-shadow: var(--shadow-sm);
+  box-sizing: border-box;
+}
+
+.hist-card:active {
+  background: var(--bg-elevated);
+  transform: scale(0.985);
+}
+
+/* Nom de la séance / routine */
+.hist-card__name {
+  font-size: var(--text-md);
+  font-weight: var(--fw-semi);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Date et heure de début */
+.hist-card__date {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* Ligne de chips : durée, volume, PR */
+.hist-card__stats {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+/* Chip individuel (durée ou volume) */
+.hist-card__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-full);
+  padding: 3px var(--space-2);
+}
+
+.hist-card__stat i {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Badge PR — s'affiche uniquement si prCount > 0 */
+.hist-card__pr-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-semi);
+  color: var(--warning);
+  background: var(--warning-dim);
+  border-radius: var(--radius-full);
+  padding: 3px var(--space-2);
+}
+
+.hist-card__pr-badge i {
+  font-size: 10px;
+}
+
+/* ── État "en cours de long-press" ── */
+.hist-card--pressing {
+  transform: scale(0.97);
+  opacity: 0.85;
+  transition:
+    transform 120ms var(--ease),
+    opacity 120ms var(--ease);
+}
+
+
+/* ============================================================
+   4. VUE DETAIL D'UNE SEANCE (.hist-detail)
+   ============================================================ */
+
+/**
+ * Remplace la liste — affichage pleine page de la séance sélectionnée.
+ * Glisse depuis la droite via animation page-in héritée de .page.
+ */
+.hist-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Header de la vue détail ── */
+.hist-detail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+/* Titre principal (nom de la séance) */
+.hist-detail__title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--fw-bold);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Ligne de date/heure sous le titre */
+.hist-detail__date {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-4);
+  padding-left: calc(36px + var(--space-3)); /* aligne sous le titre, après le bouton retour */
+}
+
+/* ── Barre de stats récapitulatives ── */
+.hist-detail__stats {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-5);
+  overflow: hidden;
+}
+
+/* Colonne individuelle de stat */
+.hist-detail__stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: var(--space-3) var(--space-2);
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* Séparateur vertical entre colonnes */
+.hist-detail__stat + .hist-detail__stat {
+  border-left: 1px solid var(--border);
+}
+
+.hist-detail__stat-value {
+  font-size: var(--text-lg);
+  font-weight: var(--fw-bold);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.hist-detail__stat-label {
+  font-size: var(--text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ── Liste des exercices ── */
+.hist-detail__exercises {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+
+/* ============================================================
+   5. BLOC EXERCICE DANS LE DETAIL (.hist-exercise)
+   ============================================================ */
+
+.hist-exercise {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* En-tête du bloc exercice */
+.hist-exercise__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Nom de l'exercice */
+.hist-exercise__name {
+  font-size: var(--text-md);
+  font-weight: var(--fw-semi);
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Meilleure série ("best set: 82.5 kg × 8") */
+.hist-exercise__best-set {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+
+/* ============================================================
+   6. TABLEAU DES SERIES (.hist-sets)
+   ============================================================ */
+
+/**
+ * Grille CSS 3 colonnes : type | valeur kg×reps | marque (PR / check)
+ * Chaque ligne est un .hist-set-row.
+ */
+.hist-sets {
+  display: grid;
+  grid-template-columns: 32px 1fr 24px;
+  gap: 0;
+  padding: var(--space-2) var(--space-4);
+}
+
+/* Ligne de série */
+.hist-set-row {
+  display: contents; /* participe à la grille parente */
+}
+
+/* Toutes les cellules d'une ligne partagent le même alignement et padding */
+.hist-set-row__type,
+.hist-set-row__value,
+.hist-set-row__mark {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) 0;
+  box-sizing: border-box;
+}
+
+/* Séparateur fin entre les lignes */
+.hist-set-row__type,
+.hist-set-row__value,
+.hist-set-row__mark {
+  border-bottom: 1px solid var(--border);
+}
+
+.hist-sets > .hist-set-row:last-child .hist-set-row__type,
+.hist-sets > .hist-set-row:last-child .hist-set-row__value,
+.hist-sets > .hist-set-row:last-child .hist-set-row__mark {
+  border-bottom: none;
+}
+
+/* ── Chip de type de série (N / W / D) ── */
+.hist-set-row__type {
+  justify-content: center;
+}
+
+.hist-set-row__type-chip {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: var(--fw-bold);
+  flex-shrink: 0;
+
+  /* Défaut : série normale */
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+/* Série d'échauffement (Warmup) */
+.hist-set-row__type-chip--warmup {
+  background: var(--warning-dim);
+  color: var(--warning);
+}
+
+/* Drop set */
+.hist-set-row__type-chip--drop {
+  background: var(--danger-dim);
+  color: var(--danger);
+}
+
+/* ── Valeur "82.5 kg × 8" ── */
+.hist-set-row__value {
+  font-size: var(--text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  padding-left: var(--space-3);
+}
+
+/* ── Marque : icône PR (étoile) ou check ── */
+.hist-set-row__mark {
+  justify-content: flex-end;
+  font-size: var(--text-sm);
+  color: var(--text-disabled);
+}
+
+/* Étoile dorée si PR */
+.hist-set-row__mark--pr {
+  color: var(--warning);
+}
+
+/* Coche verte si série complétée */
+.hist-set-row__mark--done {
+  color: var(--success);
+}
+
+/* ── Série non complétée ── */
+.hist-set-row--incomplete .hist-set-row__value {
+  opacity: 0.45;
+}
+
+.hist-set-row--incomplete .hist-set-row__type-chip {
+  opacity: 0.45;
+}
+
+
+/* ============================================================
+   7. ETAT VIDE (aucune seance enregistree)
+   Utilise les classes .empty-state de components.css — rien a ajouter.
+   Section présente comme rappel documentaire uniquement.
+   ============================================================ */
+
+/* .empty-state, .empty-state__icon, .empty-state__title, .empty-state__text
+   sont déjà définis dans components.css */
+
+
+/* ============================================================
+   8. MODAL CONFIRMATION SUPPRESSION
+   Utilise .modal-overlay + .modal de layout.css — rien a ajouter.
+   ============================================================ */
+
+/* .modal-overlay, .modal, .modal__handle, .modal__title
+   sont déjà définis dans layout.css */
+
+
+/* ============================================================
+   9. DESKTOP (>= 680px)
+   ============================================================ */
+
+@media (min-width: 680px) {
+  /* Le sticky top doit correspondre au padding étendu de .page sur desktop */
+  .hist-month {
+    top: var(--page-header-height, 60px);
+  }
+
+  /* Les cartes bénéficient d'un rayon plus généreux sur grand écran */
+  .hist-card {
+    border-radius: var(--radius-lg);
+    border-left-width: 4px;
+  }
+
+  .hist-exercise {
+    border-radius: var(--radius-lg);
+  }
+
+  /* La barre de stats peut respirer davantage */
+  .hist-detail__stat {
+    padding: var(--space-4) var(--space-3);
+  }
+
+  .hist-detail__stat-value {
+    font-size: var(--text-xl);
+  }
+}
