@@ -42,6 +42,7 @@ export default class SessionOverlay {
     this._restRemaining = 0;
     this._restTotal     = 0;
     this._restInterval  = null;
+    this._restExIdx     = null; // exercise index that triggered the current rest
 
     // Bind overlay events once in constructor using event delegation.
     // Since innerHTML is replaced on each _render(), using delegation on the
@@ -338,8 +339,8 @@ export default class SessionOverlay {
   }
 
   _buildSetRow(set, si, exIdx, prevSet) {
-    const typeLabel = set.type === 'warmup' ? 'W' : set.type === 'drop' ? 'D' : String(si + 1);
-    const typeClass = set.type === 'warmup' ? 'type-warmup' : set.type === 'drop' ? 'type-drop' : 'type-normal';
+    const typeLabel = set.type === 'warmup' ? 'W' : set.type === 'drop' ? 'D' : set.type === 'failure' ? 'F' : String(si + 1);
+    const typeClass = set.type === 'warmup' ? 'type-warmup' : set.type === 'drop' ? 'type-drop' : set.type === 'failure' ? 'type-failure' : 'type-normal';
     const doneClass = set.completed ? ' session-set-row--done' : '';
     const checkIcon = set.completed ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle-check';
     const checkClass = set.completed ? ' session-set-row__check--checked' : '';
@@ -351,7 +352,7 @@ export default class SessionOverlay {
 
     return `
       <div class="session-set-row${doneClass}" data-ex-idx="${exIdx}" data-si="${si}">
-        <button class="session-set-row__type ${typeClass}" data-action="cycle-type" data-ex-idx="${exIdx}" data-si="${si}">
+        <button class="session-set-row__type ${typeClass}" data-action="show-type-picker" data-ex-idx="${exIdx}" data-si="${si}">
           ${typeLabel}
         </button>
         <span class="session-set-row__prev">${prevText}</span>
@@ -395,6 +396,10 @@ export default class SessionOverlay {
     if (!setsEl) return;
     const ex = this._session.exercises[exIdx];
     setsEl.innerHTML = this._buildSetsTable(ex, exIdx);
+    // Si le timer de repos est actif sur cet exercice, le réinsérer
+    if (this._restInterval && this._restExIdx === exIdx) {
+      this._insertRestTimerBar();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -454,16 +459,16 @@ export default class SessionOverlay {
         if (!isNaN(exIdx) && !isNaN(si)) this._toggleSet(exIdx, si);
         break;
 
-      case 'cycle-type': {
-        if (!isNaN(exIdx) && !isNaN(si)) {
-          const types = ['normal', 'warmup', 'drop'];
-          const cur   = types.indexOf(this._session.exercises[exIdx].sets[si].type);
-          const next  = types[(cur + 1) % types.length];
-          this._session.exercises[exIdx].sets[si].type = next;
-          // Update just the type button display without full re-render
-          const newLabel = next === 'warmup' ? 'W' : next === 'drop' ? 'D' : String(si + 1);
-          target.textContent = newLabel;
-          target.className = `session-set-row__type ${next === 'warmup' ? 'type-warmup' : next === 'drop' ? 'type-drop' : 'type-normal'}`;
+      case 'show-type-picker':
+        if (!isNaN(exIdx) && !isNaN(si)) this._showTypePicker(target, exIdx, si);
+        break;
+
+      case 'select-type': {
+        const newType = target.dataset.type;
+        if (!isNaN(exIdx) && !isNaN(si) && newType) {
+          this._session.exercises[exIdx].sets[si].type = newType;
+          document.querySelector('.session-type-popup')?.remove();
+          this._reRenderSetsSection(exIdx);
         }
         break;
       }
@@ -498,13 +503,58 @@ export default class SessionOverlay {
         // If timer had already expired, restart the interval
         if (!this._restInterval) {
           const el = document.getElementById('session-rest-timer');
-          if (el) el.classList.remove('session-rest-timer--done');
+          if (el) el.classList.remove('session-rest-bar--done');
           this._restInterval = setInterval(() => this._tickRestTimer(), 1000);
         }
         this._updateRestTimerDisplay();
         break;
       }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Type picker popup
+  // ---------------------------------------------------------------------------
+
+  _showTypePicker(btn, exIdx, si) {
+    // Remove any existing picker
+    document.querySelector('.session-type-popup')?.remove();
+
+    const types = [
+      { id: 'normal',  label: 'Normal',           abbr: String(si + 1) },
+      { id: 'warmup',  label: 'Échauffement',      abbr: 'W' },
+      { id: 'drop',    label: 'Série dégressive',  abbr: 'D' },
+      { id: 'failure', label: 'Échec',             abbr: 'F' },
+    ];
+
+    const popup = document.createElement('div');
+    popup.className = 'session-type-popup';
+    popup.innerHTML = types.map(tp => `
+      <button class="session-type-popup__item" data-action="select-type"
+              data-ex-idx="${exIdx}" data-si="${si}" data-type="${tp.id}">
+        <span class="session-type-popup__abbr">${escapeHtml(tp.abbr)}</span>
+        <span>${escapeHtml(tp.label)}</span>
+      </button>`).join('');
+
+    // Position the popup below the button, clamped to viewport
+    const rect = btn.getBoundingClientRect();
+    document.body.appendChild(popup);
+    const popupH = popup.offsetHeight;
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const top = spaceBelow >= popupH
+      ? rect.bottom + 4
+      : rect.top - popupH - 4;
+    popup.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - popup.offsetWidth - 8))}px`;
+    popup.style.top  = `${top}px`;
+
+    // Close on outside click
+    const close = (e) => {
+      if (!popup.contains(e.target)) {
+        popup.remove();
+        document.removeEventListener('pointerdown', close, true);
+      }
+    };
+    setTimeout(() => document.addEventListener('pointerdown', close, true), 0);
   }
 
   // ---------------------------------------------------------------------------
@@ -535,7 +585,7 @@ export default class SessionOverlay {
 
     // Start / stop rest timer based on completion state
     if (set.completed && set.type !== 'warmup') {
-      this._startRestTimer(this._restDuration);
+      this._startRestTimer(this._restDuration, exIdx);
     } else if (!set.completed) {
       this._stopRestTimer();
     }
@@ -893,18 +943,19 @@ export default class SessionOverlay {
   }
 
   // ---------------------------------------------------------------------------
-  // Rest timer (inter-set countdown)
+  // Rest timer — barre inline dans le bloc exercice
   // ---------------------------------------------------------------------------
 
-  _startRestTimer(seconds) {
+  _startRestTimer(seconds, exIdx) {
     this._stopRestTimerImmediate();
+    this._restExIdx     = exIdx ?? null;
     this._restTotal     = seconds;
     this._restRemaining = seconds;
     this._restInterval  = setInterval(() => this._tickRestTimer(), 1000);
-    this._renderRestTimer(false);
+    this._insertRestTimerBar();
   }
 
-  /** Animated slide-out (used by Skip button) */
+  /** Suppression immédiate (bouton Ignorer) */
   _stopRestTimer() {
     if (this._restInterval) {
       clearInterval(this._restInterval);
@@ -912,14 +963,11 @@ export default class SessionOverlay {
     }
     this._restRemaining = 0;
     this._restTotal     = 0;
-    const el = document.getElementById('session-rest-timer');
-    if (el) {
-      el.classList.remove('session-rest-timer--visible');
-      setTimeout(() => el.remove(), 350);
-    }
+    this._restExIdx     = null;
+    document.getElementById('session-rest-timer')?.remove();
   }
 
-  /** Instant removal (used during cancel / finish cleanup) */
+  /** Suppression instantanée (annulation / fin de séance) */
   _stopRestTimerImmediate() {
     if (this._restInterval) {
       clearInterval(this._restInterval);
@@ -927,6 +975,7 @@ export default class SessionOverlay {
     }
     this._restRemaining = 0;
     this._restTotal     = 0;
+    this._restExIdx     = null;
     document.getElementById('session-rest-timer')?.remove();
   }
 
@@ -938,66 +987,66 @@ export default class SessionOverlay {
       this._updateRestTimerDisplay();
       navigator.vibrate?.([200, 100, 200]);
       const el = document.getElementById('session-rest-timer');
-      if (el) el.classList.add('session-rest-timer--done');
-      // Auto-dismiss after 2.5 s
+      if (el) el.classList.add('session-rest-bar--done');
+      // Auto-dismiss après 2.5 s
       setTimeout(() => {
-        const el2 = document.getElementById('session-rest-timer');
-        if (el2) {
-          el2.classList.remove('session-rest-timer--visible');
-          setTimeout(() => el2.remove(), 350);
-        }
+        document.getElementById('session-rest-timer')?.remove();
+        this._restExIdx = null;
       }, 2500);
       return;
     }
     this._updateRestTimerDisplay();
   }
 
-  _renderRestTimer(skipAnimation = false) {
+  /**
+   * Insère (ou réinsère après un _reRenderSetsSection) la barre de repos
+   * dans le tableau de séries de l'exercice courant, après la dernière série
+   * complétée.
+   */
+  _insertRestTimerBar() {
     document.getElementById('session-rest-timer')?.remove();
+    const exIdx = this._restExIdx;
+    if (exIdx === null) return;
+    const setsEl = document.getElementById(`session-sets-${exIdx}`);
+    if (!setsEl) return;
+
+    const fillPct = this._restTotal > 0
+      ? ((this._restRemaining / this._restTotal) * 100).toFixed(1)
+      : '100';
+
     const el = document.createElement('div');
     el.id        = 'session-rest-timer';
-    el.className = 'session-rest-timer';
-    this._overlay.appendChild(el);
-
-    const C = 276.46; // 2π × 44
-    const ratio  = this._restTotal > 0 ? this._restRemaining / this._restTotal : 1;
-    const offset = C * (1 - ratio);
-
+    el.className = 'session-rest-bar';
     el.innerHTML = `
-      <div class="session-rest-timer__inner">
-        <button class="session-rest-timer__btn" data-action="rest-skip">
-          <i class="fa-solid fa-forward-step"></i>
-          <span>Passer</span>
-        </button>
-        <div class="session-rest-timer__ring-wrap">
-          <svg class="session-rest-timer__svg" viewBox="0 0 100 100" aria-hidden="true">
-            <circle class="session-rest-timer__track" cx="50" cy="50" r="44"/>
-            <circle class="session-rest-timer__fill" id="session-rest-ring" cx="50" cy="50" r="44"
-              style="stroke-dasharray:${C};stroke-dashoffset:${offset};"/>
-          </svg>
-          <div class="session-rest-timer__time" id="session-rest-time">${this._formatRestTime(this._restRemaining)}</div>
-        </div>
-        <button class="session-rest-timer__btn" data-action="rest-add-time">
-          <i class="fa-solid fa-plus"></i>
-          <span>+1:00</span>
-        </button>
+      <div class="session-rest-bar__fill" id="session-rest-fill" style="width:${fillPct}%"></div>
+      <div class="session-rest-bar__content">
+        <button class="session-rest-bar__btn" data-action="rest-add-time">+1:00</button>
+        <span class="session-rest-bar__time" id="session-rest-time">${this._formatRestTime(this._restRemaining)}</span>
+        <button class="session-rest-bar__btn" data-action="rest-skip">IGNORER</button>
       </div>`;
 
-    if (skipAnimation) {
-      el.classList.add('session-rest-timer--visible');
+    // Insérer après la dernière ligne de série complétée
+    const completedRows = setsEl.querySelectorAll('.session-set-row--done');
+    const lastDone = completedRows[completedRows.length - 1];
+    if (lastDone?.nextSibling) {
+      setsEl.insertBefore(el, lastDone.nextSibling);
+    } else if (lastDone) {
+      setsEl.appendChild(el);
     } else {
-      requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('session-rest-timer--visible')));
+      // Aucune série complétée visible — ajouter à la fin
+      setsEl.appendChild(el);
     }
   }
 
   _updateRestTimerDisplay() {
     const timeEl = document.getElementById('session-rest-time');
-    const ringEl = document.getElementById('session-rest-ring');
+    const fillEl = document.getElementById('session-rest-fill');
     if (timeEl) timeEl.textContent = this._formatRestTime(this._restRemaining);
-    if (ringEl) {
-      const C = 276.46;
-      const ratio  = this._restTotal > 0 ? this._restRemaining / this._restTotal : 0;
-      ringEl.style.strokeDashoffset = String(C * (1 - ratio));
+    if (fillEl) {
+      const pct = this._restTotal > 0
+        ? ((this._restRemaining / this._restTotal) * 100).toFixed(1)
+        : '0';
+      fillEl.style.width = `${pct}%`;
     }
   }
 

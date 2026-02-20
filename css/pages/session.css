@@ -378,6 +378,12 @@
   color: var(--danger);
 }
 
+/* Failure variant */
+.session-set-row__type.type-failure {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
 /**
  * Previous-session reference value — read-only ghost text.
  * Tabular numerals prevent column jitter when values differ in width.
@@ -787,139 +793,139 @@
 
 
 /* ==========================================================================
-   11. REST TIMER (inter-set countdown)
+   11. REST TIMER — barre inline dans le tableau de séries
    ========================================================================== */
 
 /**
- * Floating panel anchored above the bottom nav while the session overlay is
- * open. Slides up from below when a set is completed.
- * z-index 25 sits between session (20) and modal (30) so active modals
- * (exercise picker, cancel confirm) render above it.
+ * Barre pleine largeur insérée dans .session-sets après la dernière série
+ * complétée. Montre le temps restant via un remplissage qui se vide de droite.
  */
-.session-rest-timer {
-  position: fixed;
-  bottom: calc(var(--nav-height) + var(--safe-bottom));
-  left: 0;
-  right: 0;
-  z-index: 25;
-  background: var(--bg-surface);
-  border-top: 1px solid var(--border-strong);
-  box-shadow: var(--shadow-md);
-  padding: var(--space-3) var(--space-4) calc(var(--space-4) + var(--safe-bottom));
-  transform: translateY(100%);
-  transition: transform 0.35s var(--ease-spring);
-}
-
-.session-rest-timer--visible {
-  transform: translateY(0);
-}
-
-/** Inner flex row: [Skip] [Ring + Time] [+1:00] */
-.session-rest-timer__inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  max-width: var(--max-width);
-  margin: 0 auto;
-}
-
-/* ── Ring + countdown time ── */
-
-.session-rest-timer__ring-wrap {
+.session-rest-bar {
   position: relative;
-  width: 80px;
-  height: 80px;
-  flex-shrink: 0;
-}
-
-/** SVG rotated so the arc starts at 12 o'clock */
-.session-rest-timer__svg {
-  width: 80px;
-  height: 80px;
-  transform: rotate(-90deg);
-  display: block;
-  overflow: visible;
-}
-
-/** Background track ring */
-.session-rest-timer__track {
-  fill: none;
-  stroke: var(--border-strong);
-  stroke-width: 6;
-}
-
-/**
- * Progress arc — shrinks clockwise as time runs out.
- * stroke-dasharray / stroke-dashoffset are set inline by JS.
- * The 0.9 s transition makes each 1-second tick feel fluid.
- */
-.session-rest-timer__fill {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 6;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.9s linear, stroke 0.3s;
-}
-
-/** Ring turns green when the countdown reaches 0 */
-.session-rest-timer--done .session-rest-timer__fill {
-  stroke: var(--success);
-}
-
-/** Countdown time centred inside the ring */
-.session-rest-timer__time {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--text-lg);
-  font-weight: var(--fw-bold);
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-  letter-spacing: -0.5px;
-  transition: color 0.3s;
-}
-
-.session-rest-timer--done .session-rest-timer__time {
-  color: var(--success);
-}
-
-/* ── Skip / Add-time control buttons ── */
-
-.session-rest-timer__btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
-  background: var(--bg-elevated);
-  border: none;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: var(--fw-semi);
-  padding: var(--space-3) var(--space-5);
-  min-width: 72px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin: var(--space-1) 0;
   -webkit-tap-highlight-color: transparent;
 }
 
-.session-rest-timer__btn i {
-  font-size: var(--text-xl);
+/** Fond translucide toujours visible */
+.session-rest-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  opacity: 0.12;
+}
+
+/** Remplissage plein-accent représentant le temps RESTANT (démarre à 100 %) */
+.session-rest-bar__fill {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  background: var(--accent);
+  opacity: 0.28;
+  width: 100%;
+  transition: width 0.95s linear;
+}
+
+/** Contenu centré superposé au remplissage */
+.session-rest-bar__content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 var(--space-2);
+}
+
+/** Décompte centré — grands chiffres tabulaires */
+.session-rest-bar__time {
+  flex: 1;
+  text-align: center;
+  font-size: var(--text-base);
+  font-weight: var(--fw-bold);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/** Boutons +1:00 et IGNORER flanquant le décompte */
+.session-rest-bar__btn {
+  font-size: var(--text-xs);
+  font-weight: var(--fw-semi);
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-2) var(--space-2);
+  white-space: nowrap;
+  opacity: 0.8;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s;
+}
+
+.session-rest-bar__btn:active { opacity: 1; }
+
+/** État terminé — passe au vert */
+.session-rest-bar--done .session-rest-bar__fill  { background: var(--success); }
+.session-rest-bar--done .session-rest-bar__time  { color: var(--success); }
+.session-rest-bar--done .session-rest-bar__btn   { color: var(--success); }
+
+
+/* ==========================================================================
+   12. POPUP SÉLECTION DU TYPE DE SÉRIE
+   ========================================================================== */
+
+/**
+ * Petite carte flottante positionnée en fixed via JS (getBoundingClientRect)
+ * sous le badge de type. Présente les 4 options : Normal / Échauffement /
+ * Série dégressive / Échec.
+ */
+.session-type-popup {
+  position: fixed;
+  z-index: calc(var(--z-session) + 5);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  min-width: 200px;
+  animation: menu-in var(--duration-fast) var(--ease-out);
+}
+
+.session-type-popup__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--text-md);
   color: var(--text);
-  transition: color 0.15s;
+  text-align: left;
+  transition: background var(--duration-fast) var(--ease);
+  -webkit-tap-highlight-color: transparent;
 }
 
-.session-rest-timer__btn:hover,
-.session-rest-timer__btn:active {
-  background: var(--accent-dim);
-  color: var(--accent);
+.session-type-popup__item:hover,
+.session-type-popup__item:active { background: var(--border); }
+
+/** Petit badge coloré avec l'abréviation */
+.session-type-popup__abbr {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-bold);
+  flex-shrink: 0;
 }
 
-.session-rest-timer__btn:hover i,
-.session-rest-timer__btn:active i {
-  color: var(--accent);
-}
+.session-type-popup__item[data-type="normal"]  .session-type-popup__abbr { background: var(--bg-input);     color: var(--text); }
+.session-type-popup__item[data-type="warmup"]  .session-type-popup__abbr { background: var(--warning-dim);  color: var(--warning); }
+.session-type-popup__item[data-type="drop"]    .session-type-popup__abbr { background: var(--danger-dim);   color: var(--danger); }
+.session-type-popup__item[data-type="failure"] .session-type-popup__abbr { background: var(--accent-dim);   color: var(--accent); }
