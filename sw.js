@@ -4,47 +4,47 @@
  * Le shell et Font Awesome Pro sont mis en cache dès l'installation.
  */
 
-const CACHE_VERSION = 'gm-v8';
+const CACHE_VERSION = 'gm-v9';
 
 // Assets à mettre en cache lors de l'installation (app shell)
 const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/css/variables.css',
-  '/css/reset.css',
-  '/css/layout.css',
-  '/css/components.css',
-  '/css/pages/exercices.css',
-  '/css/pages/historique.css',
-  '/css/pages/entrainement.css',
-  '/css/pages/session.css',
-  '/css/pages/profil.css',
-  '/css/pages/mesurer.css',
-  '/js/app.js',
-  '/js/router.js',
-  '/js/i18n.js',
-  '/js/db.js',
-  '/js/store.js',
-  '/js/components/bottom-nav.js',
-  '/js/pages/profil.js',
-  '/js/pages/historique.js',
-  '/js/pages/entrainement.js',
-  '/js/pages/session.js',
-  '/js/pages/exercices.js',
-  '/js/pages/mesurer.js',
-  '/js/data/locales/fr.js',
-  '/js/data/locales/en.js',
-  '/js/data/exercises-seed.js',
-  '/js/utils/helpers.js',
-  '/js/utils/export.js',
-  '/assets/icons/icon.svg',
+  './',
+  './index.html',
+  './manifest.json',
+  './css/variables.css',
+  './css/reset.css',
+  './css/layout.css',
+  './css/components.css',
+  './css/pages/exercices.css',
+  './css/pages/historique.css',
+  './css/pages/entrainement.css',
+  './css/pages/session.css',
+  './css/pages/profil.css',
+  './css/pages/mesurer.css',
+  './js/app.js',
+  './js/router.js',
+  './js/i18n.js',
+  './js/db.js',
+  './js/store.js',
+  './js/components/bottom-nav.js',
+  './js/pages/profil.js',
+  './js/pages/historique.js',
+  './js/pages/entrainement.js',
+  './js/pages/session.js',
+  './js/pages/exercices.js',
+  './js/pages/mesurer.js',
+  './js/data/locales/fr.js',
+  './js/data/locales/en.js',
+  './js/data/exercises-seed.js',
+  './js/utils/helpers.js',
+  './js/utils/export.js',
+  './assets/icons/icon.svg',
   // Font Awesome Pro (local)
-  '/assets/fontawesome/css/fontawesome.min.css',
-  '/assets/fontawesome/css/solid.min.css',
-  '/assets/fontawesome/css/regular.min.css',
-  '/assets/fontawesome/webfonts/fa-solid-900.woff2',
-  '/assets/fontawesome/webfonts/fa-regular-400.woff2',
+  './assets/fontawesome/css/fontawesome.min.css',
+  './assets/fontawesome/css/solid.min.css',
+  './assets/fontawesome/css/regular.min.css',
+  './assets/fontawesome/webfonts/fa-solid-900.woff2',
+  './assets/fontawesome/webfonts/fa-regular-400.woff2',
 ];
 
 // ── Installation : mise en cache du shell ──────────────────────
@@ -97,7 +97,7 @@ self.addEventListener('fetch', event => {
           .catch(() => {
             // Offline + pas en cache : retourne index.html pour les navigations
             if (event.request.mode === 'navigate') {
-              return caches.match('/index.html');
+              return caches.match(new URL('./index.html', self.location).href);
             }
           });
       })
