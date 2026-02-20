@@ -224,10 +224,22 @@
   margin: 0 auto var(--space-4);
 }
 
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
 .modal__title {
   font-size: var(--text-xl);
   font-weight: var(--fw-bold);
   margin-bottom: var(--space-4);
+}
+
+.modal__header .modal__title {
+  margin-bottom: 0;
 }
 
 /* ── Toast notifications ── */
