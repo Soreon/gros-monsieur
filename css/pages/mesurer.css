@@ -1,1 +1,461 @@
-/* mesurer.css — styles page */
+/* ============================================================
+   MESURER — Gros Monsieur
+   Page de suivi des mesures corporelles : grille de métriques,
+   vue historique, modal d'ajout
+   Depends on: css/variables.css, css/layout.css, css/components.css
+   ============================================================ */
+
+
+/* ============================================================
+   1. ONGLETS (.measure-tabs)
+   Sélecteur deux onglets pleine largeur : Général / Parties du corps
+   ============================================================ */
+
+.measure-tabs {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  padding: 3px;
+  gap: 3px;
+  margin-bottom: var(--space-5);
+  box-sizing: border-box;
+}
+
+.measure-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-3);
+  border-radius: calc(var(--radius-lg) - 3px);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-semi);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+  white-space: nowrap;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+.measure-tab:active {
+  opacity: 0.8;
+}
+
+.measure-tab--active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+
+/* ============================================================
+   2. GRILLE DE METRIQUES (.measure-grid)
+   2 colonnes sur mobile, cartes avec bord gauche accent
+   ============================================================ */
+
+.measure-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+}
+
+/* Colonne unique sur très petit écran */
+@media (max-width: 320px) {
+  .measure-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/**
+ * Carte individuelle de métrique.
+ * Même motif bord gauche accent que .hist-card de historique.css.
+ */
+.measure-card {
+  position: relative;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  padding-bottom: calc(var(--space-3) + 28px); /* espace pour le bouton "+" */
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--duration-fast) var(--ease),
+    transform var(--duration-fast) var(--ease);
+  box-shadow: var(--shadow-sm);
+  box-sizing: border-box;
+  min-height: 110px;
+}
+
+.measure-card:active {
+  background: var(--bg-elevated);
+  transform: scale(0.985);
+}
+
+/* Icône Font Awesome en haut de la carte */
+.measure-card__icon {
+  font-size: 20px;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: var(--space-1);
+  flex-shrink: 0;
+}
+
+/* Nom du type de mesure (ex. "Poids", "Tour de taille") */
+.measure-card__label {
+  font-size: var(--text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Valeur principale (ex. "82.5 kg") */
+.measure-card__value {
+  font-size: var(--text-lg);
+  font-weight: var(--fw-bold);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Delta vs mesure précédente (ex. "−1.2") */
+.measure-card__delta {
+  font-size: var(--text-xs);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-disabled);
+}
+
+/* Delta positif (hausse) */
+.measure-card__delta--up {
+  color: var(--accent);
+}
+
+/* Delta négatif (baisse) */
+.measure-card__delta--down {
+  color: var(--text-disabled);
+}
+
+/* Texte "Aucune donnée" quand pas d'entrées */
+.measure-card__no-data {
+  font-size: var(--text-xs);
+  color: var(--text-disabled);
+  font-style: italic;
+  margin-top: auto;
+}
+
+/**
+ * Bouton "+" en bas à droite de la carte.
+ * Position absolue pour ne pas perturber le flux.
+ */
+.measure-card__add-btn {
+  position: absolute;
+  bottom: var(--space-2);
+  right: var(--space-2);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: var(--text-md);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--duration-fast) var(--ease),
+    transform var(--duration-fast) var(--ease-spring);
+  flex-shrink: 0;
+}
+
+.measure-card__add-btn:active {
+  background: var(--accent);
+  color: #fff;
+  transform: scale(0.92);
+}
+
+
+/* ============================================================
+   3. VUE HISTORIQUE D'UNE METRIQUE (.measure-history)
+   Remplace la grille — liste des entrées d'un seul type
+   ============================================================ */
+
+/**
+ * Conteneur pleine page de l'historique d'une métrique.
+ * Glisse depuis la droite via l'animation .page héritée.
+ */
+.measure-history {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* En-tête sticky : bouton retour + titre + bouton "+" */
+.measure-history__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky, 2);
+  background: var(--bg);
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+/* Liste des entrées */
+.measure-history__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/**
+ * Ligne d'une entrée de mesure.
+ * Flex row : date à gauche, valeur + delta à droite.
+ */
+.measure-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--duration-fast) var(--ease),
+    transform var(--duration-fast) var(--ease),
+    opacity var(--duration-fast) var(--ease);
+}
+
+.measure-entry:active {
+  background: var(--bg-elevated);
+}
+
+/* Date de la mesure */
+.measure-entry__date {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* Bloc valeur + delta à droite */
+.measure-entry__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Valeur principale + unité */
+.measure-entry__value {
+  font-size: var(--text-md);
+  font-weight: var(--fw-bold);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Delta par rapport à l'entrée précédente */
+.measure-entry__delta {
+  font-size: var(--text-xs);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-disabled);
+}
+
+.measure-entry__delta--up {
+  color: var(--accent);
+}
+
+.measure-entry__delta--down {
+  color: var(--text-disabled);
+}
+
+/* État long-press : réduction + transparence */
+.measure-entry--pressing {
+  transform: scale(0.97);
+  opacity: 0.82;
+  transition:
+    transform 120ms var(--ease),
+    opacity 120ms var(--ease);
+}
+
+
+/* ============================================================
+   4. MODAL D'AJOUT DE MESURE
+   Utilise .modal-overlay + .modal de layout.css.
+   Seules les classes spécifiques à ce formulaire sont définies ici.
+   ============================================================ */
+
+/**
+ * Ligne flex contenant l'input valeur + le label unité.
+ * Exemple : [ 82.5 ] kg
+ */
+.measure-modal__value-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.measure-modal__value-row .form-input {
+  flex: 1;
+  box-sizing: border-box;
+}
+
+/* Label de l'unité (ex. "kg", "cm") */
+.measure-modal__unit {
+  font-size: var(--text-md);
+  font-weight: var(--fw-semi);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 28px;
+}
+
+/* Champ date — même style que form-input mais type="date" */
+.measure-modal__date-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+
+/* ============================================================
+   5. SPARKLINE SVG INLINE (.measure-sparkline)
+   Mini graphique de tendance sur la carte métrique
+   ============================================================ */
+
+.measure-sparkline {
+  width: 100%;
+  height: 32px;
+  display: block;
+  overflow: visible;
+  margin-top: var(--space-2);
+}
+
+/* Ligne principale du sparkline */
+.measure-sparkline__line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
+}
+
+/* Zone de remplissage sous la ligne (optionnel, dégradé) */
+.measure-sparkline__area {
+  fill: var(--accent-dim);
+  stroke: none;
+}
+
+
+/* ============================================================
+   6. ETATS SPECIAUX
+   ============================================================ */
+
+/* Bouton retour dans l'historique (réutilise .icon-btn) */
+.measure-history__back {
+  flex-shrink: 0;
+}
+
+/* Titre du type dans l'en-tête historique */
+.measure-history__title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--fw-bold);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Bouton "+" dans l'en-tête historique */
+.measure-history__add {
+  flex-shrink: 0;
+}
+
+/* Séparateur de mois dans la liste historique */
+.measure-history__month {
+  font-size: var(--text-xs);
+  font-weight: var(--fw-semi);
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: var(--space-2) 0 var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.measure-history__month:first-child {
+  margin-top: 0;
+}
+
+
+/* ============================================================
+   7. DESKTOP (>= 680px)
+   ============================================================ */
+
+@media (min-width: 680px) {
+  /* Trois colonnes sur grand écran */
+  .measure-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .measure-card {
+    border-radius: var(--radius-lg);
+    border-left-width: 4px;
+    padding: var(--space-4);
+    padding-bottom: calc(var(--space-4) + 32px);
+    min-height: 120px;
+  }
+
+  .measure-card__add-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .measure-entry {
+    border-radius: var(--radius-lg);
+    border-left-width: 4px;
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .measure-history__header {
+    top: 0;
+  }
+
+  .measure-tabs {
+    max-width: 360px;
+  }
+}
