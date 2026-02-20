@@ -515,16 +515,14 @@ export default class MesurerPage {
         </div>
       </div>`;
 
-    overlay.classList.add('modal-overlay--visible');
-    overlay.style.display = 'flex';
+    overlay.classList.remove('hidden');
 
     // Focus value input immediately
     const valueInput = overlay.querySelector('#measure-value-input');
     if (valueInput) setTimeout(() => valueInput.focus(), 50);
 
     const closeModal = () => {
-      overlay.style.display = 'none';
-      overlay.classList.remove('modal-overlay--visible');
+      overlay.classList.add('hidden');
       overlay.innerHTML = '';
     };
 
@@ -600,12 +598,10 @@ export default class MesurerPage {
         </div>
       </div>`;
 
-    overlay.classList.add('modal-overlay--visible');
-    overlay.style.display = 'flex';
+    overlay.classList.remove('hidden');
 
     const closeModal = () => {
-      overlay.style.display = 'none';
-      overlay.classList.remove('modal-overlay--visible');
+      overlay.classList.add('hidden');
       overlay.innerHTML = '';
     };
 

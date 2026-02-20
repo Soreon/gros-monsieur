@@ -533,10 +533,10 @@ export default class ProfilPage {
         </div>
       </div>`;
 
-    overlay.style.display = 'flex';
+    overlay.classList.remove('hidden');
 
     const closeModal = () => {
-      overlay.style.display = 'none';
+      overlay.classList.add('hidden');
       overlay.innerHTML = '';
     };
 
