@@ -27,6 +27,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: calc(var(--radius-lg) - 3px);
   font-size: var(--text-sm);
