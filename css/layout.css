@@ -275,6 +275,120 @@
   border: 0;
 }
 
+/* ── PWA Install banner ── */
+
+/**
+ * Floating card above the bottom nav that invites the user to install the PWA.
+ * Populated and shown by app.js via the beforeinstallprompt event (Chrome/Android)
+ * or iOS UA detection.
+ * z-index: 15 — above nav (10) but below session overlay (20) and modals (30),
+ * so it disappears naturally when a session starts.
+ */
+.install-banner {
+  position: fixed;
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-2));
+  left: var(--space-3);
+  right: var(--space-3);
+  z-index: 15;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(calc(100% + 80px));
+  transition: transform 0.4s var(--ease-spring);
+  pointer-events: none;
+  max-width: calc(var(--max-width) - var(--space-6));
+  margin: 0 auto;
+}
+
+.install-banner--visible {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.install-banner__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.install-banner__info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+}
+
+.install-banner__icon {
+  font-size: var(--text-xl);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.install-banner__title {
+  font-size: var(--text-sm);
+  font-weight: var(--fw-semi);
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.install-banner__sub {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.install-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.install-banner__install-btn {
+  height: 34px;
+  padding: 0 var(--space-3);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.install-banner__install-btn:active {
+  opacity: 0.8;
+}
+
+.install-banner__dismiss-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-base);
+  border-radius: var(--radius-full);
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s;
+}
+
+.install-banner__dismiss-btn:hover,
+.install-banner__dismiss-btn:active {
+  color: var(--text);
+}
+
 /* ── Desktop : centrage et layout ── */
 @media (min-width: 680px) {
   .bottom-nav {

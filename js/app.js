@@ -83,6 +83,11 @@ async function init() {
     await sessionOverlay.start(e.detail?.routineId ?? null);
   });
 
+  // 8. iOS: show install banner after a short delay (no beforeinstallprompt on Safari)
+  if (_isIOS && !_isStandalone) {
+    setTimeout(_showInstallBanner, 3000);
+  }
+
   // 7. Service Worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker
@@ -90,6 +95,105 @@ async function init() {
       .then(reg => console.log('[SW] Enregistré :', reg.scope))
       .catch(err => console.warn('[SW] Échec :', err));
   }
+}
+
+// ── PWA Install prompt ────────────────────────────────────────
+
+/** Deferred beforeinstallprompt event (Chrome / Android / Edge). */
+let _installPrompt = null;
+
+/** Detect iOS Safari (no beforeinstallprompt support). */
+const _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+/** True if the app is already running as an installed PWA. */
+const _isStandalone =
+  window.navigator.standalone === true ||
+  window.matchMedia('(display-mode: standalone)').matches;
+
+// Capture the prompt ASAP — fires before init() completes on some browsers.
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _installPrompt = e;
+  _showInstallBanner();
+});
+
+window.addEventListener('appinstalled', () => {
+  _hideInstallBanner();
+  _installPrompt = null;
+  localStorage.removeItem('gm-install-dismissed');
+});
+
+function _showInstallBanner() {
+  if (_isStandalone) return;
+
+  // Respect 7-day dismissal cooldown
+  const dismissed = localStorage.getItem('gm-install-dismissed');
+  if (dismissed && Date.now() - Number(dismissed) < 7 * 24 * 3600 * 1000) return;
+
+  const banner = document.getElementById('install-banner');
+  if (!banner) return;
+
+  if (_isIOS) {
+    // iOS: manual instructions (share → Add to Home Screen)
+    banner.innerHTML = `
+      <div class="install-banner__inner">
+        <div class="install-banner__info">
+          <i class="fa-solid fa-arrow-up-from-bracket install-banner__icon"></i>
+          <div>
+            <div class="install-banner__title">Installer Gros Monsieur</div>
+            <div class="install-banner__sub">
+              Appuyez sur <i class="fa-solid fa-arrow-up-from-bracket" style="font-size:10px;"></i>
+              puis "Sur l'écran d'accueil"
+            </div>
+          </div>
+        </div>
+        <button class="install-banner__dismiss-btn" id="install-dismiss" aria-label="Fermer">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>`;
+  } else {
+    // Chrome / Android / Edge: native install prompt
+    banner.innerHTML = `
+      <div class="install-banner__inner">
+        <div class="install-banner__info">
+          <i class="fa-solid fa-mobile-screen install-banner__icon"></i>
+          <div>
+            <div class="install-banner__title">Installer Gros Monsieur</div>
+            <div class="install-banner__sub">Accès rapide depuis l'écran d'accueil</div>
+          </div>
+        </div>
+        <div class="install-banner__actions">
+          <button class="install-banner__install-btn" id="install-btn">Installer</button>
+          <button class="install-banner__dismiss-btn" id="install-dismiss" aria-label="Fermer">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>`;
+
+    document.getElementById('install-btn')?.addEventListener('click', async () => {
+      if (!_installPrompt) return;
+      _installPrompt.prompt();
+      const { outcome } = await _installPrompt.userChoice;
+      _installPrompt = null;
+      if (outcome === 'accepted') _hideInstallBanner();
+    });
+  }
+
+  document.getElementById('install-dismiss')?.addEventListener('click', () => {
+    localStorage.setItem('gm-install-dismissed', String(Date.now()));
+    _hideInstallBanner();
+  });
+
+  // Slide in with animation
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => banner.classList.add('install-banner--visible'))
+  );
+}
+
+function _hideInstallBanner() {
+  const banner = document.getElementById('install-banner');
+  if (!banner) return;
+  banner.classList.remove('install-banner--visible');
 }
 
 init().catch(err => {
