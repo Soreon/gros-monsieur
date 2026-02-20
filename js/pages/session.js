@@ -311,7 +311,7 @@ export default class SessionOverlay {
           ${setsHtml}
         </div>
         <button class="session-add-set" data-action="add-set" data-ex-idx="${exIdx}">
-          ${t('session.add_series')}
+          <i class="fa-solid fa-plus"></i>${t('session.add_series')}
         </button>
       </div>`;
   }
