@@ -253,7 +253,7 @@ export default class SessionOverlay {
             <i class="fa-solid fa-chevron-down"></i>
           </button>
           <button class="session__btn-timer${this._globalInterval ? ' session__btn-timer--running' : ''}" data-action="open-timer-modal" aria-label="Minuteur de repos">
-            <i class="fa-regular fa-clock"></i>${this._globalInterval ? ` ${this._formatRestTime(this._globalRemaining)}` : ''}
+            <i class="fa-solid fa-stopwatch"></i>${this._globalInterval ? ` ${this._formatRestTime(this._globalRemaining)}` : ''}
           </button>
           <span class="session__timer" id="session-timer">${this._formatElapsed(this._elapsed)}</span>
           <button class="session__btn-finish" data-action="finish">
@@ -350,7 +350,7 @@ export default class SessionOverlay {
       const doneClass = set.completed ? ' session-set-row--timer-done' : '';
       return `
       <div class="session-set-row session-set-row--timer${doneClass}" data-ex-idx="${exIdx}" data-si="${si}">
-        <span class="session-set-row__timer-icon"><i class="fa-regular fa-clock"></i></span>
+        <span class="session-set-row__timer-icon"><i class="fa-solid fa-stopwatch"></i></span>
         <span class="session-set-row__timer-duration">${this._formatRestTime(set.duration ?? 90)}</span>
         ${set.completed
           ? `<i class="fa-solid fa-circle-check" style="color:var(--success);font-size:20px;padding:0 var(--space-3);"></i>`
@@ -653,7 +653,7 @@ export default class SessionOverlay {
       <button class="session-type-popup__item" data-action="add-timer-row"
               data-ex-idx="${exIdx}" data-si="${si}">
         <span class="session-type-popup__abbr session-type-popup__abbr--timer">
-          <i class="fa-regular fa-clock"></i>
+          <i class="fa-solid fa-stopwatch"></i>
         </span>
         <span>Ajouter un minuteur</span>
       </button>`;
@@ -1142,10 +1142,10 @@ export default class SessionOverlay {
     if (!btn) return;
     if (this._globalInterval || this._globalRemaining > 0) {
       btn.className = 'session__btn-timer session__btn-timer--running';
-      btn.innerHTML = `<i class="fa-regular fa-clock"></i> ${this._formatRestTime(this._globalRemaining)}`;
+      btn.innerHTML = `<i class="fa-solid fa-stopwatch"></i> ${this._formatRestTime(this._globalRemaining)}`;
     } else {
       btn.className = 'session__btn-timer';
-      btn.innerHTML = `<i class="fa-regular fa-clock"></i>`;
+      btn.innerHTML = `<i class="fa-solid fa-stopwatch"></i>`;
     }
   }
 

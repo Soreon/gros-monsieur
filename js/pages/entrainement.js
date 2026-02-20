@@ -464,7 +464,7 @@ export default class EntrainementPage {
         if (set.type === 'timer') {
           return `
         <div class="sets-editor__set-row sets-editor__set-row--timer" data-si="${si}">
-          <span class="sets-editor__timer-icon"><i class="fa-regular fa-clock"></i></span>
+          <span class="sets-editor__timer-icon"><i class="fa-solid fa-stopwatch"></i></span>
           <input
             class="sets-editor__input input"
             type="number"
@@ -611,7 +611,7 @@ export default class EntrainementPage {
         `<hr class="session-type-popup__divider">
         <button class="session-type-popup__item" data-add-timer="1">
           <span class="session-type-popup__abbr session-type-popup__abbr--timer">
-            <i class="fa-regular fa-clock"></i>
+            <i class="fa-solid fa-stopwatch"></i>
           </span>
           <span>Ajouter un minuteur</span>
         </button>`;
