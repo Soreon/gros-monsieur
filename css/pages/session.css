@@ -838,6 +838,20 @@
 
 .session-set-row__timer-start:active { opacity: 0.7; }
 
+.session-set-row__timer-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s;
+}
+.session-set-row__timer-remove:active { color: var(--danger, #e55); }
+
 .session-set-row--timer-done {
   opacity: 0.5;
 }

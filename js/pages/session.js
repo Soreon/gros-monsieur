@@ -349,7 +349,8 @@ export default class SessionOverlay {
         <span class="session-set-row__timer-duration">${this._formatRestTime(set.duration ?? 90)}</span>
         ${set.completed
           ? `<i class="fa-solid fa-circle-check" style="color:var(--success);font-size:20px;padding:0 var(--space-3);"></i>`
-          : `<button class="session-set-row__timer-start" data-action="start-timer-row" data-ex-idx="${exIdx}" data-si="${si}">DÉMARRER</button>`}
+          : `<button class="session-set-row__timer-start" data-action="start-timer-row" data-ex-idx="${exIdx}" data-si="${si}">DÉMARRER</button>
+             <button class="session-set-row__timer-remove" data-action="remove-timer-row" data-ex-idx="${exIdx}" data-si="${si}" aria-label="Supprimer le minuteur"><i class="fa-solid fa-xmark"></i></button>`}
       </div>`;
     }
 
@@ -505,6 +506,14 @@ export default class SessionOverlay {
           if (set?.type === 'timer' && !set.completed) {
             this._startRestTimer(set.duration ?? this._restDuration, exIdx, si);
           }
+        }
+        break;
+      }
+
+      case 'remove-timer-row': {
+        if (!isNaN(exIdx) && !isNaN(si)) {
+          this._session.exercises[exIdx].sets.splice(si, 1);
+          this._reRenderSetsSection(exIdx);
         }
         break;
       }
