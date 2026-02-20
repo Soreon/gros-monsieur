@@ -85,6 +85,7 @@
   font-size: var(--text-sm);
   font-weight: var(--fw-semi);
   font-variant-numeric: tabular-nums;
+  margin-top: var(--space-2);
 }
 
 .profile-workouts i {
