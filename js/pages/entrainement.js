@@ -630,7 +630,9 @@ export default class EntrainementPage {
         if (!item) return;
         popup.remove();
         if (item.dataset.addTimer) {
-          exEntry.sets.splice(si + 1, 0, { type: 'timer', duration: 90, reps: 0, weight: 0 });
+          if (exEntry.sets[si + 1]?.type !== 'timer') {
+            exEntry.sets.splice(si + 1, 0, { type: 'timer', duration: 90, reps: 0, weight: 0 });
+          }
         } else {
           exEntry.sets[si].type = item.dataset.type;
         }

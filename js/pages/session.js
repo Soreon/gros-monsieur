@@ -489,10 +489,12 @@ export default class SessionOverlay {
 
       case 'add-timer-row': {
         if (!isNaN(exIdx) && !isNaN(si)) {
-          const timerSet = { type: 'timer', duration: this._restDuration, completed: false, weight: 0, reps: 0, isPR: false };
-          this._session.exercises[exIdx].sets.splice(si + 1, 0, timerSet);
-          document.querySelector('.session-type-popup')?.remove();
-          this._reRenderSetsSection(exIdx);
+          const sets = this._session.exercises[exIdx].sets;
+          if (sets[si + 1]?.type !== 'timer') {
+            sets.splice(si + 1, 0, { type: 'timer', duration: this._restDuration, completed: false, weight: 0, reps: 0, isPR: false });
+            document.querySelector('.session-type-popup')?.remove();
+            this._reRenderSetsSection(exIdx);
+          }
         }
         break;
       }
@@ -611,9 +613,11 @@ export default class SessionOverlay {
         this._session.exercises[eIdx].sets[sIdx].type = btn.dataset.type;
         this._reRenderSetsSection(eIdx);
       } else if (action === 'add-timer-row' && !isNaN(eIdx) && !isNaN(sIdx)) {
-        const timerSet = { type: 'timer', duration: this._restDuration, completed: false, weight: 0, reps: 0, isPR: false };
-        this._session.exercises[eIdx].sets.splice(sIdx + 1, 0, timerSet);
-        this._reRenderSetsSection(eIdx);
+        const sets = this._session.exercises[eIdx].sets;
+        if (sets[sIdx + 1]?.type !== 'timer') {
+          sets.splice(sIdx + 1, 0, { type: 'timer', duration: this._restDuration, completed: false, weight: 0, reps: 0, isPR: false });
+          this._reRenderSetsSection(eIdx);
+        }
       }
     });
   }
