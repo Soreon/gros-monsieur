@@ -43,6 +43,7 @@ export default class SessionOverlay {
     this._restTotal     = 0;
     this._restInterval  = null;
     this._restExIdx     = null; // exercise index that triggered the current rest
+    this._restSi        = null;        // set index of the active timer row
 
     // Bind overlay events once in constructor using event delegation.
     // Since innerHTML is replaced on each _render(), using delegation on the
@@ -339,6 +340,19 @@ export default class SessionOverlay {
   }
 
   _buildSetRow(set, si, exIdx, prevSet) {
+    // Timer row — special layout, no weight/reps
+    if (set.type === 'timer') {
+      const doneClass = set.completed ? ' session-set-row--timer-done' : '';
+      return `
+      <div class="session-set-row session-set-row--timer${doneClass}" data-ex-idx="${exIdx}" data-si="${si}">
+        <span class="session-set-row__timer-icon"><i class="fa-regular fa-clock"></i></span>
+        <span class="session-set-row__timer-duration">${this._formatRestTime(set.duration ?? 90)}</span>
+        ${set.completed
+          ? `<i class="fa-solid fa-circle-check" style="color:var(--success);font-size:20px;padding:0 var(--space-3);"></i>`
+          : `<button class="session-set-row__timer-start" data-action="start-timer-row" data-ex-idx="${exIdx}" data-si="${si}">DÉMARRER</button>`}
+      </div>`;
+    }
+
     const typeLabel = set.type === 'warmup' ? 'W' : set.type === 'drop' ? 'D' : set.type === 'failure' ? 'F' : String(si + 1);
     const typeClass = set.type === 'warmup' ? 'type-warmup' : set.type === 'drop' ? 'type-drop' : set.type === 'failure' ? 'type-failure' : 'type-normal';
     const doneClass = set.completed ? ' session-set-row--done' : '';
@@ -473,6 +487,26 @@ export default class SessionOverlay {
         break;
       }
 
+      case 'add-timer-row': {
+        if (!isNaN(exIdx) && !isNaN(si)) {
+          const timerSet = { type: 'timer', duration: this._restDuration, completed: false, weight: 0, reps: 0, isPR: false };
+          this._session.exercises[exIdx].sets.splice(si + 1, 0, timerSet);
+          document.querySelector('.session-type-popup')?.remove();
+          this._reRenderSetsSection(exIdx);
+        }
+        break;
+      }
+
+      case 'start-timer-row': {
+        if (!isNaN(exIdx) && !isNaN(si)) {
+          const set = this._session.exercises[exIdx]?.sets[si];
+          if (set?.type === 'timer' && !set.completed) {
+            this._startRestTimer(set.duration ?? this._restDuration, exIdx, si);
+          }
+        }
+        break;
+      }
+
       case 'add-set': {
         if (!isNaN(exIdx)) {
           const sets = this._session.exercises[exIdx].sets;
@@ -534,7 +568,15 @@ export default class SessionOverlay {
               data-ex-idx="${exIdx}" data-si="${si}" data-type="${tp.id}">
         <span class="session-type-popup__abbr">${escapeHtml(tp.abbr)}</span>
         <span>${escapeHtml(tp.label)}</span>
-      </button>`).join('');
+      </button>`).join('') +
+      `<hr class="session-type-popup__divider">
+      <button class="session-type-popup__item" data-action="add-timer-row"
+              data-ex-idx="${exIdx}" data-si="${si}">
+        <span class="session-type-popup__abbr session-type-popup__abbr--timer">
+          <i class="fa-regular fa-clock"></i>
+        </span>
+        <span>Ajouter un minuteur</span>
+      </button>`;
 
     // Position the popup below the button, clamped to viewport
     const rect = btn.getBoundingClientRect();
@@ -583,10 +625,8 @@ export default class SessionOverlay {
       set.isPR = false;
     }
 
-    // Start / stop rest timer based on completion state
-    if (set.completed && set.type !== 'warmup') {
-      this._startRestTimer(this._restDuration, exIdx);
-    } else if (!set.completed) {
+    // Stop any running timer when a set is uncompleted
+    if (!set.completed) {
       this._stopRestTimer();
     }
 
@@ -946,25 +986,30 @@ export default class SessionOverlay {
   // Rest timer — barre inline dans le bloc exercice
   // ---------------------------------------------------------------------------
 
-  _startRestTimer(seconds, exIdx) {
+  _startRestTimer(seconds, exIdx, si = null) {
     this._stopRestTimerImmediate();
     this._restExIdx     = exIdx ?? null;
+    this._restSi        = si;
     this._restTotal     = seconds;
     this._restRemaining = seconds;
     this._restInterval  = setInterval(() => this._tickRestTimer(), 1000);
     this._insertRestTimerBar();
   }
 
-  /** Suppression immédiate (bouton Ignorer) */
+  /** Suppression immédiate (bouton Ignorer) — réaffiche la ligne timer en idle */
   _stopRestTimer() {
     if (this._restInterval) {
       clearInterval(this._restInterval);
       this._restInterval = null;
     }
+    const exIdx = this._restExIdx;
     this._restRemaining = 0;
     this._restTotal     = 0;
     this._restExIdx     = null;
+    this._restSi        = null;
     document.getElementById('session-rest-timer')?.remove();
+    // Re-render the exercise sets so the timer row returns to idle state
+    if (exIdx !== null) this._reRenderSetsSection(exIdx);
   }
 
   /** Suppression instantanée (annulation / fin de séance) */
@@ -976,6 +1021,7 @@ export default class SessionOverlay {
     this._restRemaining = 0;
     this._restTotal     = 0;
     this._restExIdx     = null;
+    this._restSi        = null;
     document.getElementById('session-rest-timer')?.remove();
   }
 
@@ -986,12 +1032,22 @@ export default class SessionOverlay {
       this._restInterval = null;
       this._updateRestTimerDisplay();
       navigator.vibrate?.([200, 100, 200]);
+
+      // Mark the timer set as completed
+      const exIdx = this._restExIdx;
+      const si    = this._restSi;
+      const set   = this._session?.exercises[exIdx]?.sets[si];
+      if (set?.type === 'timer') set.completed = true;
+
       const el = document.getElementById('session-rest-timer');
       if (el) el.classList.add('session-rest-bar--done');
-      // Auto-dismiss après 2.5 s
+
+      // After 2.5 s, replace bar with the done row
       setTimeout(() => {
-        document.getElementById('session-rest-timer')?.remove();
         this._restExIdx = null;
+        this._restSi    = null;
+        document.getElementById('session-rest-timer')?.remove();
+        if (exIdx !== null) this._reRenderSetsSection(exIdx);
       }, 2500);
       return;
     }
@@ -1006,9 +1062,8 @@ export default class SessionOverlay {
   _insertRestTimerBar() {
     document.getElementById('session-rest-timer')?.remove();
     const exIdx = this._restExIdx;
+    const si    = this._restSi;
     if (exIdx === null) return;
-    const setsEl = document.getElementById(`session-sets-${exIdx}`);
-    if (!setsEl) return;
 
     const fillPct = this._restTotal > 0
       ? ((this._restRemaining / this._restTotal) * 100).toFixed(1)
@@ -1025,16 +1080,15 @@ export default class SessionOverlay {
         <button class="session-rest-bar__btn" data-action="rest-skip">IGNORER</button>
       </div>`;
 
-    // Insérer après la dernière ligne de série complétée
-    const completedRows = setsEl.querySelectorAll('.session-set-row--done');
-    const lastDone = completedRows[completedRows.length - 1];
-    if (lastDone?.nextSibling) {
-      setsEl.insertBefore(el, lastDone.nextSibling);
-    } else if (lastDone) {
-      setsEl.appendChild(el);
+    // Replace the idle timer row if found, otherwise append to the sets container
+    const timerRow = si !== null
+      ? this._overlay.querySelector(`.session-set-row--timer[data-ex-idx="${exIdx}"][data-si="${si}"]`)
+      : null;
+    if (timerRow) {
+      timerRow.replaceWith(el);
     } else {
-      // Aucune série complétée visible — ajouter à la fin
-      setsEl.appendChild(el);
+      const setsEl = document.getElementById(`session-sets-${exIdx}`);
+      if (setsEl) setsEl.appendChild(el);
     }
   }
 

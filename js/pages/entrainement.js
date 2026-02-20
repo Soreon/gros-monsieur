@@ -445,20 +445,47 @@ export default class EntrainementPage {
       const sets = exEntry.sets || [];
 
       const typeLabel = (set, si) => {
-        if (set.type === 'warmup') return 'W';
-        if (set.type === 'drop')   return 'D';
+        if (set.type === 'warmup')  return 'W';
+        if (set.type === 'drop')    return 'D';
+        if (set.type === 'failure') return 'F';
+        if (set.type === 'timer')   return '⏱';
         return String(si + 1);
       };
 
       const typeClass = (set) => {
-        if (set.type === 'warmup') return 'type-warmup';
-        if (set.type === 'drop')   return 'type-drop';
+        if (set.type === 'warmup')  return 'type-warmup';
+        if (set.type === 'drop')    return 'type-drop';
+        if (set.type === 'failure') return 'type-failure';
+        if (set.type === 'timer')   return 'type-timer';
         return 'type-normal';
       };
 
-      const setsRows = sets.map((set, si) => `
+      const renderSetRow = (set, si) => {
+        if (set.type === 'timer') {
+          return `
+        <div class="sets-editor__set-row sets-editor__set-row--timer" data-si="${si}">
+          <span class="sets-editor__timer-icon"><i class="fa-regular fa-clock"></i></span>
+          <input
+            class="sets-editor__input input"
+            type="number"
+            min="1"
+            step="1"
+            inputmode="numeric"
+            value="${set.duration ?? 90}"
+            placeholder="90"
+            data-field="duration"
+            data-si="${si}"
+            style="flex:1;"
+          >
+          <span class="sets-editor__timer-unit">s</span>
+          <button class="btn btn--icon" data-action="remove-set" data-si="${si}" aria-label="${t('action.delete')}">
+            <i class="fa-solid fa-xmark" style="color:var(--danger);"></i>
+          </button>
+        </div>`;
+        }
+        return `
         <div class="sets-editor__set-row" data-si="${si}">
-          <button class="sets-editor__set-type ${typeClass(set)}" data-action="cycle-set-type" data-si="${si}">
+          <button class="sets-editor__set-type ${typeClass(set)}" data-action="show-set-type-picker" data-si="${si}">
             ${typeLabel(set, si)}
           </button>
           <input
@@ -486,7 +513,9 @@ export default class EntrainementPage {
           <button class="btn btn--icon" data-action="remove-set" data-si="${si}" aria-label="${t('action.delete')}">
             <i class="fa-solid fa-xmark" style="color:var(--danger);"></i>
           </button>
-        </div>`).join('');
+        </div>`;
+      };
+      const setsRows = sets.map((set, si) => renderSetRow(set, si)).join('');
 
       overlay.innerHTML = `
         <div class="modal sets-editor">
@@ -520,8 +549,9 @@ export default class EntrainementPage {
         const si = parseInt(e.target.dataset.si);
         if (!field || isNaN(si)) return;
         const val = parseFloat(e.target.value) || 0;
-        if (field === 'weight') exEntry.sets[si].weight = val;
-        if (field === 'reps')   exEntry.sets[si].reps   = val;
+        if (field === 'weight')   exEntry.sets[si].weight   = val;
+        if (field === 'reps')     exEntry.sets[si].reps     = val;
+        if (field === 'duration') exEntry.sets[si].duration = Math.max(1, Math.round(val)) || 90;
       };
 
       overlay.onclick = (e) => {
@@ -556,14 +586,64 @@ export default class EntrainementPage {
           renderSetsEditor();
           return;
         }
-        if (action === 'cycle-set-type' && !isNaN(si)) {
-          const types = ['normal', 'warmup', 'drop'];
-          const cur = types.indexOf(exEntry.sets[si].type);
-          exEntry.sets[si].type = types[(cur + 1) % types.length];
-          renderSetsEditor();
+        if (action === 'show-set-type-picker' && !isNaN(si)) {
+          _showSetTypePicker(target, si);
           return;
         }
       };
+    };
+
+    const _showSetTypePicker = (btn, si) => {
+      document.querySelector('.session-type-popup')?.remove();
+      const types = [
+        { id: 'normal',  label: 'Normal',           abbr: String(si + 1) },
+        { id: 'warmup',  label: 'Échauffement',      abbr: 'W' },
+        { id: 'drop',    label: 'Série dégressive',  abbr: 'D' },
+        { id: 'failure', label: 'Échec',             abbr: 'F' },
+      ];
+      const popup = document.createElement('div');
+      popup.className = 'session-type-popup';
+      popup.innerHTML = types.map(tp => `
+        <button class="session-type-popup__item" data-type="${tp.id}">
+          <span class="session-type-popup__abbr">${escapeHtml(tp.abbr)}</span>
+          <span>${escapeHtml(tp.label)}</span>
+        </button>`).join('') +
+        `<hr class="session-type-popup__divider">
+        <button class="session-type-popup__item" data-add-timer="1">
+          <span class="session-type-popup__abbr session-type-popup__abbr--timer">
+            <i class="fa-regular fa-clock"></i>
+          </span>
+          <span>Ajouter un minuteur</span>
+        </button>`;
+
+      const rect = btn.getBoundingClientRect();
+      document.body.appendChild(popup);
+      const popupH = popup.offsetHeight;
+      const spaceBelow = window.innerHeight - rect.bottom - 8;
+      const top = spaceBelow >= popupH ? rect.bottom + 4 : rect.top - popupH - 4;
+      popup.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - popup.offsetWidth - 8))}px`;
+      popup.style.top  = `${top}px`;
+
+      // Handle clicks inside the popup directly (it's outside the overlay)
+      popup.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-type], [data-add-timer]');
+        if (!item) return;
+        popup.remove();
+        if (item.dataset.addTimer) {
+          exEntry.sets.splice(si + 1, 0, { type: 'timer', duration: 90, reps: 0, weight: 0 });
+        } else {
+          exEntry.sets[si].type = item.dataset.type;
+        }
+        renderSetsEditor();
+      });
+
+      const close = (e) => {
+        if (!popup.contains(e.target)) {
+          popup.remove();
+          document.removeEventListener('pointerdown', close, true);
+        }
+      };
+      setTimeout(() => document.addEventListener('pointerdown', close, true), 0);
     };
 
     renderSetsEditor();

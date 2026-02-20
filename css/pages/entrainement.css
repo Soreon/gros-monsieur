@@ -712,3 +712,29 @@
 .action-sheet__item--danger {
   color: var(--danger);
 }
+
+
+/* ── Sets editor: timer row ── */
+.sets-editor__set-row--timer {
+  align-items: center;
+}
+
+.sets-editor__timer-icon {
+  min-width: 36px;
+  text-align: center;
+  color: var(--accent);
+  font-size: var(--text-base);
+  flex-shrink: 0;
+}
+
+.sets-editor__timer-unit {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  padding: 0 var(--space-1);
+}
+
+/* Sets editor: type picker popup (same structure as session) */
+.session-type-popup {
+  /* Already defined in session.css — no duplication needed */
+}
