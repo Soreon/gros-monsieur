@@ -538,8 +538,30 @@ export default class SessionOverlay {
         break;
       }
 
-      case 'remove-timer-row':
+      case 'remove-timer-row': {
+        // Timer rows : suppression directe sans confirmation
+        if (!isNaN(exIdx) && !isNaN(si)) {
+          this._session.exercises[exIdx].sets.splice(si, 1);
+          this._reRenderSetsSection(exIdx);
+        }
+        break;
+      }
+
       case 'delete-set': {
+        // Séries normales : affiche la popup de confirmation
+        if (!isNaN(exIdx) && !isNaN(si)) {
+          this._showDeleteConfirmation(exIdx, si);
+        }
+        break;
+      }
+
+      case 'cancel-delete':
+        document.getElementById('session-delete-confirm')?.remove();
+        this._closeOpenSwipeRow();
+        break;
+
+      case 'confirm-delete': {
+        document.getElementById('session-delete-confirm')?.remove();
         if (!isNaN(exIdx) && !isNaN(si)) {
           this._session.exercises[exIdx].sets.splice(si, 1);
           this._reRenderSetsSection(exIdx);
@@ -1195,6 +1217,9 @@ export default class SessionOverlay {
         this._swipeRow.style.transform  = 'translateX(-72px)';
         if (this._openSwipeRow && this._openSwipeRow !== this._swipeRow) this._closeOpenSwipeRow();
         this._openSwipeRow = this._swipeRow;
+        const eIdx = parseInt(this._swipeRow.dataset.exIdx, 10);
+        const sIdx = parseInt(this._swipeRow.dataset.si, 10);
+        this._showDeleteConfirmation(eIdx, sIdx);
       } else if (dx > 20 && isOpen) {
         this._closeOpenSwipeRow();
       } else if (!isOpen) {
@@ -1223,6 +1248,26 @@ export default class SessionOverlay {
     this._openSwipeRow.style.transition = 'transform 0.2s';
     this._openSwipeRow.style.transform  = 'translateX(0)';
     this._openSwipeRow = null;
+  }
+
+  _showDeleteConfirmation(exIdx, si) {
+    document.getElementById('session-delete-confirm')?.remove();
+    const el = document.createElement('div');
+    el.id             = 'session-delete-confirm';
+    el.className      = 'delete-confirm-backdrop';
+    el.dataset.action = 'cancel-delete'; // tap backdrop = annuler
+    el.innerHTML = `
+      <div class="delete-confirm__dialog">
+        <p class="delete-confirm__text">Supprimer la série&nbsp;?</p>
+        <div class="delete-confirm__actions">
+          <button class="delete-confirm__btn delete-confirm__btn--cancel"
+                  data-action="cancel-delete">ANNULER</button>
+          <button class="delete-confirm__btn delete-confirm__btn--confirm"
+                  data-action="confirm-delete"
+                  data-ex-idx="${exIdx}" data-si="${si}">SUPPRIMER</button>
+        </div>
+      </div>`;
+    this._overlay.appendChild(el);
   }
 
   // ---------------------------------------------------------------------------
