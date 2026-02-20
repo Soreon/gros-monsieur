@@ -87,6 +87,14 @@ export default {
   'workout.no_exercises':      'Aucun exercice ajouté',
   'workout.start_btn':         'COMMENCER L\'ENTRAÎNEMENT',
   'workout.delete_routine':    'Supprimer la routine',
+  'workout.edit_routine':      'Modifier la routine',
+  'workout.duplicate_routine': 'Dupliquer la routine',
+  'workout.delete_confirm':    'Supprimer cette routine ?',
+  'workout.delete_confirm_sub':'Cette action est irréversible.',
+  'workout.exercises_count':   '{n} exercice(s)',
+  'workout.sets_count':        '{n} série(s)',
+  'workout.choose_exercise':   'Choisir un exercice',
+  'workout.free_workout_desc': 'Commencer sans routine',
 
   /* ── Session active ── */
   'session.finish':            'TERMINER',

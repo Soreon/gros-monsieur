@@ -1,1 +1,714 @@
-/* entrainement.css — styles page */
+/* ==========================================================================
+   entrainement.css — Routines / Workout page
+   Gros Monsieur fitness PWA
+   Depends on: css/variables.css, css/components.css, css/pages/exercices.css
+   ========================================================================== */
+
+
+/* ==========================================================================
+   1. FREE WORKOUT BUTTON (list view — top of routine list)
+   ========================================================================== */
+
+/**
+ * Full-width card button that launches a free (unstructured) workout session.
+ * Layout: bolt icon + text block on the left, chevron pushed to the right.
+ */
+.routine-free-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-4);
+  width: 100%;
+  height: 64px;
+
+  background: var(--bg-surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+
+  cursor: pointer;
+  transition: background 0.15s;
+  box-sizing: border-box;
+}
+
+.routine-free-btn:hover,
+.routine-free-btn:active {
+  background: var(--bg-elevated);
+}
+
+/* Bolt icon — accent color, fixed size */
+.routine-free-btn .fa-bolt {
+  font-size: 20px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* Text block (title + subtitle) */
+.routine-free-btn__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.routine-free-btn__title {
+  font-weight: 600;
+  color: var(--text);
+  font-size: var(--text-base);
+}
+
+.routine-free-btn__sub {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* Chevron pushed to the far right */
+.routine-free-btn .fa-chevron-right {
+  color: var(--text-disabled);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+
+/* ==========================================================================
+   2. ROUTINE LIST (list view)
+   ========================================================================== */
+
+/**
+ * Vertical stack of routine cards.
+ * Extra bottom padding prevents the last card from hiding behind the bottom nav.
+ */
+.routine-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  padding-bottom: 80px; /* bottom nav clearance */
+}
+
+/**
+ * Individual routine card — tap to open detail view.
+ */
+.routine-card {
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.routine-card:hover,
+.routine-card:active {
+  background: var(--bg-elevated);
+}
+
+/* Primary name of the routine */
+.routine-card__name {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: var(--space-1);
+}
+
+/* Secondary meta row: exercise count · estimated duration */
+.routine-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* Dot separator between meta items */
+.routine-card__meta-sep {
+  color: var(--text-disabled);
+}
+
+
+/* ==========================================================================
+   3. ROUTINE DETAIL VIEW
+   ========================================================================== */
+
+/**
+ * Scrollable container that fills available viewport height.
+ * Extra bottom padding leaves room for the sticky start button.
+ */
+.routine-detail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: var(--space-4);
+  padding-bottom: 100px; /* space for sticky start button */
+}
+
+/* "X exercises · ~Y min" subtitle beneath the routine name */
+.routine-detail__subtitle {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-5);
+}
+
+/* Vertical list of exercise rows */
+.routine-detail__exercises {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/**
+ * Single exercise row within detail view.
+ * Separated by a bottom border; last row has no border.
+ */
+.routine-detail__exercise-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.routine-detail__exercise-row:last-child {
+  border-bottom: none;
+}
+
+/* Colored emoji / letter icon square */
+.routine-detail__exercise-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--text-base);
+}
+
+/* Text block (name + sets summary) */
+.routine-detail__exercise-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.routine-detail__exercise-name {
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.routine-detail__exercise-sets {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* -------------------------------------------------------------------
+   Sticky "Start Routine" button wrapper
+   ------------------------------------------------------------------- */
+
+/**
+ * Fades out over the last exercise row via a gradient, keeping the button
+ * visually floating without a hard cut-off.
+ */
+.routine-start-wrap {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: var(--space-3) var(--space-4);
+  background: linear-gradient(to top, var(--bg) 60%, transparent);
+}
+
+.routine-start-btn {
+  display: block;
+  width: 100%;
+  height: 56px;
+
+  background: var(--accent);
+  color: #fff;
+
+  font-size: var(--text-base);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.routine-start-btn:hover,
+.routine-start-btn:active {
+  opacity: 0.85;
+}
+
+
+/* ==========================================================================
+   4. ROUTINE EDITOR (edit view)
+   ========================================================================== */
+
+/**
+ * Scrollable form container for creating / editing a routine.
+ */
+.routine-editor {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+  padding-bottom: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Underline-style name input — transparent background, accent focus indicator */
+.routine-editor__name-input {
+  width: 100%;
+  padding: var(--space-3) 0;
+
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--border);
+
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text);
+
+  outline: none;
+  box-sizing: border-box;
+}
+
+.routine-editor__name-input:focus {
+  border-bottom-color: var(--accent);
+}
+
+/* Section heading: "EXERCISES", "NOTES", etc. */
+.routine-editor__section-title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-3);
+}
+
+/* -------------------------------------------------------------------
+   Exercise items inside the editor
+   ------------------------------------------------------------------- */
+
+.editor-exercise-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+/**
+ * Draggable / tappable exercise row in the editor.
+ * Tap opens the sets editor for that exercise.
+ */
+.editor-exercise-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.editor-exercise-item:active {
+  background: var(--bg-elevated);
+}
+
+/* Colored icon square (mirrors detail view) */
+.editor-exercise-item__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--text-base);
+}
+
+.editor-exercise-item__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-exercise-item__name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editor-exercise-item__sets {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* Delete (trash) icon — danger color, never shrinks */
+.editor-exercise-item__delete {
+  flex-shrink: 0;
+  color: var(--danger);
+}
+
+/* -------------------------------------------------------------------
+   "Add exercise" dashed button
+   ------------------------------------------------------------------- */
+
+.editor-add-exercise-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+
+  width: 100%;
+  height: 52px;
+
+  background: transparent;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-md);
+
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  box-sizing: border-box;
+}
+
+.editor-add-exercise-btn:hover,
+.editor-add-exercise-btn:active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+
+/* ==========================================================================
+   5. EXERCISE PICKER (full-screen modal)
+   ========================================================================== */
+
+/**
+ * Full-viewport overlay for selecting exercises to add to a routine.
+ * Layered above the standard modal z-index.
+ * The list area reuses .exercises-list / .exercise-item from exercices.css.
+ */
+.picker-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-modal) + 10);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header row: back button + title + optional confirm action */
+.picker-fullscreen__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.picker-fullscreen__title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+
+/* Search bar row beneath the header */
+.picker-fullscreen__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--bg-surface);
+}
+
+/* Magnifier icon */
+.picker-fullscreen__search-icon {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+/* Bare text input — inherits modal background from parent */
+.picker-fullscreen__search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: var(--text-base);
+  color: var(--text);
+  padding: var(--space-2) 0;
+}
+
+.picker-fullscreen__search-input::placeholder {
+  color: var(--text-disabled);
+}
+
+/**
+ * Scrollable exercise list area.
+ * Inherits grouped list styles from exercices.css:
+ *   .exercises-list, .exercises-group, .exercises-group__letter, .exercise-item
+ */
+.picker-fullscreen__list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+
+/* ==========================================================================
+   6. SETS EDITOR (bottom sheet modal)
+   ========================================================================== */
+
+/**
+ * Bottom sheet that slides up inside a .modal-overlay (position: fixed).
+ * Overrides the default centered .modal positioning with absolute + bottom: 0.
+ */
+.sets-editor {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+}
+
+/* Header: exercise name + close button */
+.sets-editor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sets-editor__title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+
+/* Scrollable body that holds column headers + set rows + add button */
+.sets-editor__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  padding-bottom: var(--space-8);
+}
+
+/* Column header row: "#", "TYPE", "KG", "REPS" */
+.sets-editor__cols-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
+  border-bottom: 1px solid var(--border);
+
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* Individual set row */
+.sets-editor__set-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* -------------------------------------------------------------------
+   Set type toggle button (normal / warmup / drop)
+   ------------------------------------------------------------------- */
+
+.sets-editor__set-type {
+  min-width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-align: center;
+  line-height: 36px;
+
+  background: var(--bg-input);
+  color: var(--text);
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Warm-up set: amber tint */
+.sets-editor__set-type.type-warmup {
+  background: rgba(240, 160, 48, 0.15);
+  color: #f0a030;
+}
+
+/* Drop set: danger tint */
+.sets-editor__set-type.type-drop {
+  background: rgba(229, 83, 83, 0.15);
+  color: var(--danger);
+}
+
+/* Normal set (explicit class, same as base) */
+.sets-editor__set-type.type-normal {
+  background: var(--bg-input);
+  color: var(--text);
+}
+
+/* -------------------------------------------------------------------
+   Weight / reps numeric inputs
+   ------------------------------------------------------------------- */
+
+.sets-editor__input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+
+  color: var(--text);
+  font-size: var(--text-sm);
+  text-align: center;
+  padding: 0 var(--space-2);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.sets-editor__input:focus {
+  border-color: var(--accent);
+}
+
+/* Hide number input spin buttons across browsers */
+.sets-editor__input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.sets-editor__input[type="number"]::-webkit-inner-spin-button,
+.sets-editor__input[type="number"]::-webkit-outer-spin-button {
+  display: none;
+}
+
+/* -------------------------------------------------------------------
+   "Add set" dashed button at the bottom of the sheet
+   ------------------------------------------------------------------- */
+
+.sets-editor__add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+
+  width: 100%;
+  height: 48px;
+  margin-top: var(--space-3);
+
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+
+  transition: color 0.15s, border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.sets-editor__add:hover,
+.sets-editor__add:active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+
+/* ==========================================================================
+   7. ACTION SHEET (long-press / context menu)
+   ========================================================================== */
+
+/**
+ * Bottom-anchored sheet for contextual actions on a routine or exercise.
+ * Sits inside a .modal-overlay (position: fixed) — uses absolute to hug the bottom.
+ * Generic modal / context-menu base styles live in components.css.
+ */
+.action-sheet {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  width: 100%;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+}
+
+/* Optional descriptive title above the items */
+.action-sheet__title {
+  padding: var(--space-4);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Each tappable action row */
+.action-sheet__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  font-size: var(--text-base);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  transition: background 0.1s;
+}
+
+.action-sheet__item:active {
+  background: var(--bg-input);
+}
+
+.action-sheet__item:last-child {
+  border-bottom: none;
+}
+
+/* Destructive actions (delete, reset, …) */
+.action-sheet__item--danger {
+  color: var(--danger);
+}

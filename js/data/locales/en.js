@@ -87,6 +87,14 @@ export default {
   'workout.no_exercises':      'No exercises added',
   'workout.start_btn':         'START WORKOUT',
   'workout.delete_routine':    'Delete routine',
+  'workout.edit_routine':      'Edit routine',
+  'workout.duplicate_routine': 'Duplicate routine',
+  'workout.delete_confirm':    'Delete this routine?',
+  'workout.delete_confirm_sub':'This action cannot be undone.',
+  'workout.exercises_count':   '{n} exercise(s)',
+  'workout.sets_count':        '{n} set(s)',
+  'workout.choose_exercise':   'Choose an exercise',
+  'workout.free_workout_desc': 'Start without a routine',
 
   /* ── Active session ── */
   'session.finish':            'FINISH',
