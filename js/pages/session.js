@@ -58,9 +58,17 @@ export default class SessionOverlay {
     this._openSwipeRow = null;   // .session-set-row actuellement révélé
 
     // Long press / reorder state
-    this._lpTimer  = null;
-    this._lpStartX = 0;
-    this._lpStartY = 0;
+    this._lpTimer      = null;
+    this._lpStartX     = 0;
+    this._lpStartY     = 0;
+    this._lpExIdx      = -1;
+
+    // Drag-to-reorder state (active while finger is held after long press)
+    this._reorderActive    = false;
+    this._reorderDragging  = null;   // item DOM element being dragged
+    this._reorderStartY    = 0;      // touch Y when drag started
+    this._reorderStartIdx  = -1;
+    this._reorderTargetIdx = -1;
 
     // Bind overlay events once in constructor using event delegation.
     // Since innerHTML is replaced on each _render(), using delegation on the
@@ -1162,9 +1170,11 @@ export default class SessionOverlay {
     if (exName) {
       this._lpStartX = touch.clientX;
       this._lpStartY = touch.clientY;
+      const exEl = exName.closest('.session-exercise');
+      this._lpExIdx = exEl ? parseInt(exEl.id.replace('session-ex-', ''), 10) : 0;
       this._lpTimer = setTimeout(() => {
         this._lpTimer = null;
-        this._showReorderMode();
+        this._showReorderMode(this._lpExIdx);
       }, 500);
     }
   }
@@ -1178,6 +1188,39 @@ export default class SessionOverlay {
     if (this._lpTimer && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
       clearTimeout(this._lpTimer);
       this._lpTimer = null;
+    }
+
+    // Reorder drag — takes priority while reorder view is active
+    if (this._reorderActive && this._reorderDragging) {
+      e.preventDefault();
+      const container = document.getElementById('session-reorder');
+      if (!container) return;
+      const dragDy = touch.clientY - this._reorderStartY;
+      this._reorderDragging.style.transform = `translateY(${dragDy}px)`;
+
+      // Determine target index from finger position
+      const containerTop = container.getBoundingClientRect().top;
+      const fingerY      = touch.clientY - containerTop;
+      const items        = [...container.querySelectorAll('.session-reorder__item')];
+      let   newTarget    = this._reorderStartIdx;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i] === this._reorderDragging) continue;
+        const mid = items[i].getBoundingClientRect().top + items[i].offsetHeight / 2 - containerTop;
+        if (fingerY > mid) newTarget = i;
+      }
+      if (newTarget !== this._reorderTargetIdx) {
+        this._reorderTargetIdx = newTarget;
+        const h = this._reorderDragging.offsetHeight;
+        items.forEach((it, i) => {
+          if (it === this._reorderDragging) return;
+          let shift = 0;
+          if (this._reorderStartIdx < newTarget && i > this._reorderStartIdx && i <= newTarget)      shift = -h;
+          else if (this._reorderStartIdx > newTarget && i >= newTarget && i < this._reorderStartIdx) shift = h;
+          it.style.transition = 'transform 0.15s';
+          it.style.transform  = shift ? `translateY(${shift}px)` : '';
+        });
+      }
+      return;
     }
 
     if (!this._swipeRow) return;
@@ -1208,6 +1251,20 @@ export default class SessionOverlay {
     clearTimeout(this._lpTimer);
     this._lpTimer = null;
 
+    // Reorder: finger lifted → commit order and return to normal view
+    if (this._reorderActive) {
+      this._reorderActive = false;
+      const from = this._reorderStartIdx;
+      const to   = this._reorderTargetIdx;
+      this._reorderDragging = null;
+      if (from !== to) {
+        const [moved] = this._session.exercises.splice(from, 1);
+        this._session.exercises.splice(to, 0, moved);
+      }
+      this._render();
+      return;
+    }
+
     if (this._swipeRow && this._swipeDir === 'h') {
       const dx = e.changedTouches[0].clientX - this._swipeStartX;
       const isOpen = this._openSwipeRow === this._swipeRow;
@@ -1235,6 +1292,15 @@ export default class SessionOverlay {
   _onTouchCancel(e) {
     clearTimeout(this._lpTimer);
     this._lpTimer = null;
+
+    // Reorder: touch cancelled → discard order change and return to normal view
+    if (this._reorderActive) {
+      this._reorderActive   = false;
+      this._reorderDragging = null;
+      this._render();
+      return;
+    }
+
     if (this._swipeRow) {
       this._swipeRow.style.transition = 'transform 0.2s';
       this._swipeRow.style.transform  = 'translateX(0)';
@@ -1274,7 +1340,7 @@ export default class SessionOverlay {
   // Reorder mode — long press on exercise name → drag-to-sort
   // ---------------------------------------------------------------------------
 
-  _showReorderMode() {
+  _showReorderMode(lpExIdx) {
     navigator.vibrate?.(50);
     const itemsHtml = this._session.exercises.map((ex, i) => {
       const exercise = this._getExercise(ex.exerciseId);
@@ -1301,76 +1367,24 @@ export default class SessionOverlay {
           <span class="session__timer" id="session-timer">${this._formatElapsed(this._elapsed)}</span>
           <button class="session__btn-finish" data-action="finish">${t('session.finish')}</button>
         </div>
-        <p class="session-reorder__hint">Maintenez et glissez pour réordonner</p>
         <div class="session-reorder" id="session-reorder">${itemsHtml}</div>
       </div>`;
 
-    this._initReorderDrag();
-  }
-
-  _initReorderDrag() {
+    // Immediately start dragging the long-pressed exercise — drag follows finger
+    // until touchend/touchcancel, at which point the order is committed and
+    // the normal view is restored.
     const container = document.getElementById('session-reorder');
     if (!container) return;
+    const items = [...container.querySelectorAll('.session-reorder__item')];
+    const item  = items[lpExIdx];
+    if (!item) return;
 
-    let dragging = null, startY = 0, startIdx = -1, targetIdx = -1;
-    const getItems = () => [...container.querySelectorAll('.session-reorder__item')];
-
-    container.addEventListener('touchstart', e => {
-      const item = e.target.closest('.session-reorder__item');
-      if (!item) return;
-      dragging  = item;
-      startY    = e.touches[0].clientY;
-      startIdx  = getItems().indexOf(item);
-      targetIdx = startIdx;
-      item.classList.add('session-reorder__item--dragging');
-    }, { passive: true });
-
-    container.addEventListener('touchmove', e => {
-      if (!dragging) return;
-      e.preventDefault();
-      const dy = e.touches[0].clientY - startY;
-      dragging.style.transform = `translateY(${dy}px)`;
-
-      // Determine target index from finger position
-      const containerTop = container.getBoundingClientRect().top;
-      const fingerY      = e.touches[0].clientY - containerTop;
-      const items        = getItems();
-      let   newTarget    = startIdx;
-      for (let i = 0; i < items.length; i++) {
-        if (items[i] === dragging) continue;
-        const mid = items[i].getBoundingClientRect().top + items[i].offsetHeight / 2 - containerTop;
-        if (fingerY > mid) newTarget = i;
-      }
-
-      if (newTarget !== targetIdx) {
-        targetIdx = newTarget;
-        const h = dragging.offsetHeight;
-        items.forEach((item, i) => {
-          if (item === dragging) return;
-          let shift = 0;
-          if (startIdx < targetIdx && i > startIdx && i <= targetIdx)      shift = -h;
-          else if (startIdx > targetIdx && i >= targetIdx && i < startIdx) shift = h;
-          item.style.transition = 'transform 0.15s';
-          item.style.transform  = shift ? `translateY(${shift}px)` : '';
-        });
-      }
-    }, { passive: false });
-
-    const finish = () => {
-      if (!dragging) return;
-      dragging.classList.remove('session-reorder__item--dragging');
-      getItems().forEach(it => { it.style.transform = ''; it.style.transition = ''; });
-      const from = startIdx, to = targetIdx;
-      dragging = null;
-      if (from !== to) {
-        const [moved] = this._session.exercises.splice(from, 1);
-        this._session.exercises.splice(to, 0, moved);
-      }
-      this._render();
-    };
-
-    container.addEventListener('touchend',    finish);
-    container.addEventListener('touchcancel', finish);
+    this._reorderActive    = true;
+    this._reorderDragging  = item;
+    this._reorderStartY    = this._lpStartY;
+    this._reorderStartIdx  = lpExIdx;
+    this._reorderTargetIdx = lpExIdx;
+    item.classList.add('session-reorder__item--dragging');
   }
 
   // Timer modal — modale plein écran (image 7 : choix durée / image 8 : décompte)
