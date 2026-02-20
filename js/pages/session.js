@@ -50,11 +50,27 @@ export default class SessionOverlay {
     this._globalRemaining = 0;
     this._globalTotal     = 0;
 
+    // Swipe-to-delete state
+    this._swipeRow     = null;   // .session-set-row en cours de swipe
+    this._swipeStartX  = 0;
+    this._swipeStartY  = 0;
+    this._swipeDir     = null;   // 'h' | 'v' | null
+    this._openSwipeRow = null;   // .session-set-row actuellement révélé
+
+    // Long press / reorder state
+    this._lpTimer  = null;
+    this._lpStartX = 0;
+    this._lpStartY = 0;
+
     // Bind overlay events once in constructor using event delegation.
     // Since innerHTML is replaced on each _render(), using delegation on the
     // persistent element means handlers always work without re-attaching.
-    this._overlay.addEventListener('input', e => this._onOverlayInput(e));
-    this._overlay.addEventListener('click', e => this._onOverlayClick(e));
+    this._overlay.addEventListener('input',       e => this._onOverlayInput(e));
+    this._overlay.addEventListener('click',       e => this._onOverlayClick(e));
+    this._overlay.addEventListener('touchstart',  e => this._onTouchStart(e),  { passive: true });
+    this._overlay.addEventListener('touchmove',   e => this._onTouchMove(e),   { passive: false });
+    this._overlay.addEventListener('touchend',    e => this._onTouchEnd(e));
+    this._overlay.addEventListener('touchcancel', e => this._onTouchCancel(e));
     this._bar.addEventListener('click', () => this._session && this._expand());
   }
 
@@ -242,6 +258,7 @@ export default class SessionOverlay {
   // ---------------------------------------------------------------------------
 
   _render() {
+    this._openSwipeRow = null;
     const exercisesHtml = this._session.exercises.map((ex, i) =>
       this._buildExerciseBlock(ex, i)
     ).join('');
@@ -371,28 +388,33 @@ export default class SessionOverlay {
       : '—';
 
     return `
-      <div class="session-set-row${doneClass}" data-ex-idx="${exIdx}" data-si="${si}">
-        <button class="session-set-row__type ${typeClass}" data-action="show-type-picker" data-ex-idx="${exIdx}" data-si="${si}">
-          ${typeLabel}
+      <div class="set-row-wrap">
+        <button class="set-row-delete" data-action="delete-set" data-ex-idx="${exIdx}" data-si="${si}" aria-label="Supprimer la série">
+          <i class="fa-solid fa-trash"></i>
         </button>
-        <span class="session-set-row__prev">${prevText}</span>
-        <input
-          class="session-set-row__input"
-          type="number" min="0" step="0.5" inputmode="decimal"
-          value="${set.weight > 0 ? set.weight : ''}"
-          placeholder="—"
-          data-field="weight" data-ex-idx="${exIdx}" data-si="${si}"
-        >
-        <input
-          class="session-set-row__input"
-          type="number" min="0" step="1" inputmode="numeric"
-          value="${set.reps > 0 ? set.reps : ''}"
-          placeholder="—"
-          data-field="reps" data-ex-idx="${exIdx}" data-si="${si}"
-        >
-        <button class="session-set-row__check${checkClass}" data-action="toggle-set" data-ex-idx="${exIdx}" data-si="${si}">
-          ${prBadge}<i class="${checkIcon}"></i>
-        </button>
+        <div class="session-set-row${doneClass}" data-ex-idx="${exIdx}" data-si="${si}">
+          <button class="session-set-row__type ${typeClass}" data-action="show-type-picker" data-ex-idx="${exIdx}" data-si="${si}">
+            ${typeLabel}
+          </button>
+          <span class="session-set-row__prev">${prevText}</span>
+          <input
+            class="session-set-row__input"
+            type="number" min="0" step="0.5" inputmode="decimal"
+            value="${set.weight > 0 ? set.weight : ''}"
+            placeholder="—"
+            data-field="weight" data-ex-idx="${exIdx}" data-si="${si}"
+          >
+          <input
+            class="session-set-row__input"
+            type="number" min="0" step="1" inputmode="numeric"
+            value="${set.reps > 0 ? set.reps : ''}"
+            placeholder="—"
+            data-field="reps" data-ex-idx="${exIdx}" data-si="${si}"
+          >
+          <button class="session-set-row__check${checkClass}" data-action="toggle-set" data-ex-idx="${exIdx}" data-si="${si}">
+            ${prBadge}<i class="${checkIcon}"></i>
+          </button>
+        </div>
       </div>`;
   }
 
@@ -414,6 +436,7 @@ export default class SessionOverlay {
   _reRenderSetsSection(exIdx) {
     const setsEl = document.getElementById(`session-sets-${exIdx}`);
     if (!setsEl) return;
+    if (this._openSwipeRow && setsEl.contains(this._openSwipeRow)) this._openSwipeRow = null;
     const ex = this._session.exercises[exIdx];
     setsEl.innerHTML = this._buildSetsTable(ex, exIdx);
     // Si le timer de repos est actif sur cet exercice, le réinsérer
@@ -515,7 +538,8 @@ export default class SessionOverlay {
         break;
       }
 
-      case 'remove-timer-row': {
+      case 'remove-timer-row':
+      case 'delete-set': {
         if (!isNaN(exIdx) && !isNaN(si)) {
           this._session.exercises[exIdx].sets.splice(si, 1);
           this._reRenderSetsSection(exIdx);
@@ -737,10 +761,11 @@ export default class SessionOverlay {
       this._stopRestTimer();
     }
 
-    // Targeted DOM update of the set row only — preserves focus on other inputs
-    const rowEl = this._overlay.querySelector(
+    // Targeted DOM update — replace the whole .set-row-wrap (or .session-set-row for timer rows)
+    const toggleBtn = this._overlay.querySelector(
       `[data-action="toggle-set"][data-ex-idx="${exIdx}"][data-si="${si}"]`
-    )?.closest('.session-set-row');
+    );
+    const rowEl = toggleBtn?.closest('.set-row-wrap') ?? toggleBtn?.closest('.session-set-row');
     if (rowEl) {
       const newHtml = this._buildSetRow(set, si, exIdx, (this._prevSets[ex.exerciseId] || [])[si]);
       const temp = document.createElement('div');
@@ -1090,6 +1115,219 @@ export default class SessionOverlay {
   }
 
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Touch gestures — swipe-to-delete + long-press reorder
+  // ---------------------------------------------------------------------------
+
+  _onTouchStart(e) {
+    const touch = e.touches[0];
+    this._swipeStartX = touch.clientX;
+    this._swipeStartY = touch.clientY;
+    this._swipeDir    = null;
+
+    // Close revealed row if touch is outside its wrapper
+    if (this._openSwipeRow) {
+      const wrap = this._openSwipeRow.closest('.set-row-wrap');
+      if (wrap && !wrap.contains(e.target)) this._closeOpenSwipeRow();
+    }
+
+    // Swipe-to-delete: track non-timer set rows
+    const setRow = e.target.closest('.session-set-row:not(.session-set-row--timer)');
+    this._swipeRow = setRow || null;
+
+    // Long press: exercise name → reorder mode
+    const exName = e.target.closest('.session-exercise__name');
+    if (exName) {
+      this._lpStartX = touch.clientX;
+      this._lpStartY = touch.clientY;
+      this._lpTimer = setTimeout(() => {
+        this._lpTimer = null;
+        this._showReorderMode();
+      }, 500);
+    }
+  }
+
+  _onTouchMove(e) {
+    const touch = e.touches[0];
+    const dx = touch.clientX - this._swipeStartX;
+    const dy = touch.clientY - this._swipeStartY;
+
+    // Cancel long press on movement
+    if (this._lpTimer && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      clearTimeout(this._lpTimer);
+      this._lpTimer = null;
+    }
+
+    if (!this._swipeRow) return;
+
+    // Determine direction on first significant movement
+    if (this._swipeDir === null && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+      this._swipeDir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+    }
+    if (this._swipeDir !== 'h') return;
+
+    e.preventDefault(); // block scroll while swiping horizontally
+
+    const isOpen = this._openSwipeRow === this._swipeRow;
+    if (dx < 0) {
+      // Swipe left — clamp to delete-button width
+      const clamped = Math.max(dx, -72);
+      this._swipeRow.style.transition = 'none';
+      this._swipeRow.style.transform  = `translateX(${clamped}px)`;
+    } else if (dx > 0 && isOpen) {
+      // Swipe right to close
+      const clamped = Math.min(dx - 72, 0);
+      this._swipeRow.style.transition = 'none';
+      this._swipeRow.style.transform  = `translateX(${clamped}px)`;
+    }
+  }
+
+  _onTouchEnd(e) {
+    clearTimeout(this._lpTimer);
+    this._lpTimer = null;
+
+    if (this._swipeRow && this._swipeDir === 'h') {
+      const dx = e.changedTouches[0].clientX - this._swipeStartX;
+      const isOpen = this._openSwipeRow === this._swipeRow;
+      if (dx < -40) {
+        // Snap to revealed
+        this._swipeRow.style.transition = 'transform 0.2s';
+        this._swipeRow.style.transform  = 'translateX(-72px)';
+        if (this._openSwipeRow && this._openSwipeRow !== this._swipeRow) this._closeOpenSwipeRow();
+        this._openSwipeRow = this._swipeRow;
+      } else if (dx > 20 && isOpen) {
+        this._closeOpenSwipeRow();
+      } else if (!isOpen) {
+        // Snap back
+        this._swipeRow.style.transition = 'transform 0.2s';
+        this._swipeRow.style.transform  = 'translateX(0)';
+      }
+    }
+    this._swipeRow  = null;
+    this._swipeDir  = null;
+  }
+
+  _onTouchCancel(e) {
+    clearTimeout(this._lpTimer);
+    this._lpTimer = null;
+    if (this._swipeRow) {
+      this._swipeRow.style.transition = 'transform 0.2s';
+      this._swipeRow.style.transform  = 'translateX(0)';
+      this._swipeRow = null;
+    }
+    this._swipeDir = null;
+  }
+
+  _closeOpenSwipeRow() {
+    if (!this._openSwipeRow) return;
+    this._openSwipeRow.style.transition = 'transform 0.2s';
+    this._openSwipeRow.style.transform  = 'translateX(0)';
+    this._openSwipeRow = null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reorder mode — long press on exercise name → drag-to-sort
+  // ---------------------------------------------------------------------------
+
+  _showReorderMode() {
+    navigator.vibrate?.(50);
+    const itemsHtml = this._session.exercises.map((ex, i) => {
+      const exercise = this._getExercise(ex.exerciseId);
+      const name     = exercise ? exercise.name : (ex.exerciseName || '?');
+      const color    = colorForId(ex.exerciseId);
+      const initial  = name.trim().charAt(0).toUpperCase();
+      return `
+        <div class="session-reorder__item" data-ex-idx="${i}">
+          <div class="session-exercise__icon" style="background:${color}22;color:${color};">${initial}</div>
+          <span class="session-reorder__name">${escapeHtml(name)}</span>
+          <i class="fa-solid fa-grip-lines session-reorder__grip"></i>
+        </div>`;
+    }).join('');
+
+    this._overlay.innerHTML = `
+      <div class="session">
+        <div class="session__header">
+          <button class="btn btn--icon session__btn-minimize" data-action="minimize" aria-label="Réduire">
+            <i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <button class="session__btn-timer${this._globalInterval ? ' session__btn-timer--running' : ''}" data-action="open-timer-modal" aria-label="Minuteur de repos">
+            <i class="fa-regular fa-stopwatch fa-lg"></i>${this._globalInterval ? ` ${this._formatRestTime(this._globalRemaining)}` : ''}
+          </button>
+          <span class="session__timer" id="session-timer">${this._formatElapsed(this._elapsed)}</span>
+          <button class="session__btn-finish" data-action="finish">${t('session.finish')}</button>
+        </div>
+        <p class="session-reorder__hint">Maintenez et glissez pour réordonner</p>
+        <div class="session-reorder" id="session-reorder">${itemsHtml}</div>
+      </div>`;
+
+    this._initReorderDrag();
+  }
+
+  _initReorderDrag() {
+    const container = document.getElementById('session-reorder');
+    if (!container) return;
+
+    let dragging = null, startY = 0, startIdx = -1, targetIdx = -1;
+    const getItems = () => [...container.querySelectorAll('.session-reorder__item')];
+
+    container.addEventListener('touchstart', e => {
+      const item = e.target.closest('.session-reorder__item');
+      if (!item) return;
+      dragging  = item;
+      startY    = e.touches[0].clientY;
+      startIdx  = getItems().indexOf(item);
+      targetIdx = startIdx;
+      item.classList.add('session-reorder__item--dragging');
+    }, { passive: true });
+
+    container.addEventListener('touchmove', e => {
+      if (!dragging) return;
+      e.preventDefault();
+      const dy = e.touches[0].clientY - startY;
+      dragging.style.transform = `translateY(${dy}px)`;
+
+      // Determine target index from finger position
+      const containerTop = container.getBoundingClientRect().top;
+      const fingerY      = e.touches[0].clientY - containerTop;
+      const items        = getItems();
+      let   newTarget    = startIdx;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i] === dragging) continue;
+        const mid = items[i].getBoundingClientRect().top + items[i].offsetHeight / 2 - containerTop;
+        if (fingerY > mid) newTarget = i;
+      }
+
+      if (newTarget !== targetIdx) {
+        targetIdx = newTarget;
+        const h = dragging.offsetHeight;
+        items.forEach((item, i) => {
+          if (item === dragging) return;
+          let shift = 0;
+          if (startIdx < targetIdx && i > startIdx && i <= targetIdx)      shift = -h;
+          else if (startIdx > targetIdx && i >= targetIdx && i < startIdx) shift = h;
+          item.style.transition = 'transform 0.15s';
+          item.style.transform  = shift ? `translateY(${shift}px)` : '';
+        });
+      }
+    }, { passive: false });
+
+    const finish = () => {
+      if (!dragging) return;
+      dragging.classList.remove('session-reorder__item--dragging');
+      getItems().forEach(it => { it.style.transform = ''; it.style.transition = ''; });
+      const from = startIdx, to = targetIdx;
+      dragging = null;
+      if (from !== to) {
+        const [moved] = this._session.exercises.splice(from, 1);
+        this._session.exercises.splice(to, 0, moved);
+      }
+      this._render();
+    };
+
+    container.addEventListener('touchend',    finish);
+    container.addEventListener('touchcancel', finish);
+  }
+
   // Timer modal — modale plein écran (image 7 : choix durée / image 8 : décompte)
   // Entièrement indépendant du timer inline (_restInterval).
   // ---------------------------------------------------------------------------

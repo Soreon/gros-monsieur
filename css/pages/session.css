@@ -120,6 +120,57 @@
    3. SESSION TITLE ROW  (below header, non-sticky)
    ========================================================================== */
 
+/* ==========================================================================
+   2b. REORDER MODE — vue simplifiée drag-to-sort
+   ========================================================================== */
+
+.session-reorder__hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.session-reorder {
+  display: flex;
+  flex-direction: column;
+}
+
+.session-reorder__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.session-reorder__name {
+  flex: 1;
+  font-size: var(--text-base);
+  font-weight: var(--fw-semi);
+  color: var(--accent);
+}
+
+.session-reorder__grip {
+  color: var(--text-muted);
+  font-size: var(--text-lg);
+  flex-shrink: 0;
+}
+
+.session-reorder__item--dragging {
+  opacity: 0.85;
+  background: var(--surface);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  border-radius: var(--radius-sm);
+  z-index: 10;
+  position: relative;
+}
+
 /**
  * Workout / routine name and a per-exercise rest timer displayed side by side.
  * Sits just below the sticky header; scrolls with the page content.
@@ -314,11 +365,40 @@
 
 /* --- Individual set row --- */
 
+/* Wrapper for swipe-to-delete: clips the sliding row */
+.set-row-wrap {
+  position: relative;
+  overflow: hidden;
+}
+
+.set-row-wrap:last-of-type .session-set-row {
+  border-bottom: none;
+}
+
+/* Red delete button revealed on swipe-left */
+.set-row-delete {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 72px;
+  background: var(--danger, #e55353);
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.set-row-delete:active { opacity: 0.85; }
+
 /**
  * Each row contains: type badge | prev reference | kg input | reps input | check.
  * Smooth background transition used for the --done state.
+ * Will-change improves GPU compositing during swipe.
  */
 .session-set-row {
+  will-change: transform;
   display: flex;
   align-items: center;
   gap: var(--space-2);
