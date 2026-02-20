@@ -590,13 +590,32 @@ export default class SessionOverlay {
     popup.style.top  = `${top}px`;
 
     // Close on outside click
-    const close = (e) => {
+    const closePopup = (e) => {
       if (!popup.contains(e.target)) {
         popup.remove();
-        document.removeEventListener('pointerdown', close, true);
+        document.removeEventListener('pointerdown', closePopup, true);
       }
     };
-    setTimeout(() => document.addEventListener('pointerdown', close, true), 0);
+    setTimeout(() => document.addEventListener('pointerdown', closePopup, true), 0);
+
+    // Handle clicks inside popup (popup is in body, not in overlay → must self-handle)
+    popup.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action  = btn.dataset.action;
+      const eIdx    = parseInt(btn.dataset.exIdx, 10);
+      const sIdx    = parseInt(btn.dataset.si,    10);
+      popup.remove();
+      document.removeEventListener('pointerdown', closePopup, true);
+      if (action === 'select-type' && !isNaN(eIdx) && !isNaN(sIdx)) {
+        this._session.exercises[eIdx].sets[sIdx].type = btn.dataset.type;
+        this._reRenderSetsSection(eIdx);
+      } else if (action === 'add-timer-row' && !isNaN(eIdx) && !isNaN(sIdx)) {
+        const timerSet = { type: 'timer', duration: this._restDuration, completed: false, weight: 0, reps: 0, isPR: false };
+        this._session.exercises[eIdx].sets.splice(sIdx + 1, 0, timerSet);
+        this._reRenderSetsSection(eIdx);
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------
