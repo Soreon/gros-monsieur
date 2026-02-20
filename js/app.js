@@ -14,6 +14,7 @@ import { initI18n } from './i18n.js';
 import { initRouter } from './router.js';
 import { BottomNav } from './components/bottom-nav.js';
 import { initDB, dbGetProfile } from './db.js';
+import SessionOverlay from './pages/session.js';
 
 // ── 1. Thème ─────────────────────────────────────────────────
 // Appliqué immédiatement (avant le premier paint) depuis localStorage
@@ -76,7 +77,13 @@ async function init() {
   // 5. Routeur
   initRouter();
 
-  // 6. Service Worker
+  // 6. Session overlay (persistant, écoute l'événement 'start-session')
+  const sessionOverlay = new SessionOverlay();
+  document.getElementById('app').addEventListener('start-session', async (e) => {
+    await sessionOverlay.start(e.detail?.routineId ?? null);
+  });
+
+  // 7. Service Worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker
       .register('/sw.js')

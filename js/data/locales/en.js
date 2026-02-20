@@ -116,6 +116,10 @@ export default {
   'session.summary_duration':  'Duration',
   'session.summary_volume':    'Total volume',
   'session.summary_prs':       'Records',
+  'session.best_set':          'Best set',
+  'session.free_name':         'Empty workout',
+  'session.remove_exercise':   'Remove exercise',
+  'session.no_sets':           'No completed sets',
 
   /* ── Exercises page ── */
   'exercises.title':           'Exercises',

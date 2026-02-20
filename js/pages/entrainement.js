@@ -6,7 +6,7 @@
  */
 
 import { t } from '../i18n.js';
-import { uid, formatShortDate } from '../utils/helpers.js';
+import { uid, formatDateShort } from '../utils/helpers.js';
 import {
   dbGetAllExercises,
   dbGetAllRoutines,
@@ -141,7 +141,7 @@ export default class EntrainementPage {
 
   _buildRoutineCard(r) {
     const lastUsed = r.lastUsedAt
-      ? t('workout.last_used', { date: formatShortDate(r.lastUsedAt) })
+      ? t('workout.last_used', { date: formatDateShort(r.lastUsedAt) })
       : t('workout.never_used');
     const exCount = r.exercises ? r.exercises.length : 0;
     const exLabel = t('workout.exercises_count', { n: exCount });
@@ -160,7 +160,7 @@ export default class EntrainementPage {
 
   _renderDetail(routine) {
     const lastUsed = routine.lastUsedAt
-      ? t('workout.last_used', { date: formatShortDate(routine.lastUsedAt) })
+      ? t('workout.last_used', { date: formatDateShort(routine.lastUsedAt) })
       : t('workout.never_used');
 
     const exercisesHtml = (!routine.exercises || routine.exercises.length === 0)
