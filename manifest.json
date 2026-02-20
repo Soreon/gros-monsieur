@@ -1,0 +1,29 @@
+{
+  "name": "Gros Monsieur",
+  "short_name": "GM",
+  "description": "Suivi d'entraînement fitness et musculation",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#1c1f26",
+  "theme_color": "#1c1f26",
+  "lang": "fr",
+  "categories": ["health", "fitness", "sports"],
+  "icons": [
+    {
+      "src": "/assets/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Nouvel entraînement",
+      "short_name": "Entraîner",
+      "url": "/#entrainement",
+      "icons": [{ "src": "/assets/icons/icon.svg", "sizes": "any" }]
+    }
+  ]
+}

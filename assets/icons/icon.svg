@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#1c1f26"/>
+  <!-- Dumbbell stylisé -->
+  <g fill="#7c5cbf">
+    <!-- Barre centrale -->
+    <rect x="156" y="240" width="200" height="32" rx="8"/>
+    <!-- Poids gauche -->
+    <rect x="108" y="196" width="52" height="120" rx="14"/>
+    <!-- Poids droite -->
+    <rect x="352" y="196" width="52" height="120" rx="14"/>
+    <!-- Colliers -->
+    <rect x="148" y="214" width="20" height="84" rx="6"/>
+    <rect x="344" y="214" width="20" height="84" rx="6"/>
+  </g>
+</svg>
