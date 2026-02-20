@@ -247,8 +247,8 @@ export default class SessionOverlay {
           <button class="btn btn--icon session__btn-minimize" data-action="minimize" aria-label="Réduire">
             <i class="fa-solid fa-chevron-down"></i>
           </button>
-          <button class="btn btn--icon session__btn-reset" data-action="reset-timer" aria-label="Réinitialiser">
-            <i class="fa-solid fa-rotate-right"></i>
+          <button class="session__btn-timer${this._restInterval ? ' session__btn-timer--running' : ''}" data-action="open-timer-modal" aria-label="Minuteur de repos">
+            <i class="fa-regular fa-clock"></i>${this._restInterval ? ` ${this._formatRestTime(this._restRemaining)}` : ''}
           </button>
           <span class="session__timer" id="session-timer">${this._formatElapsed(this._elapsed)}</span>
           <button class="session__btn-finish" data-action="finish">
@@ -273,9 +273,9 @@ export default class SessionOverlay {
       </div>`;
     // Event delegation handlers are already bound in constructor — no re-attach needed.
 
-    // Re-append rest timer if a countdown was already running
+    // Re-insert inline bar and update header pill if a countdown was already running
     if (this._restInterval !== null) {
-      this._renderRestTimer(true);
+      this._insertRestTimerBar();
     }
   }
 
@@ -539,19 +539,83 @@ export default class SessionOverlay {
         break;
 
       case 'rest-skip':
+      case 'timer-skip':
         this._stopRestTimer();
         break;
 
       case 'rest-add-time': {
         this._restRemaining += 60;
         this._restTotal = Math.max(this._restTotal, this._restRemaining);
-        // If timer had already expired, restart the interval
         if (!this._restInterval) {
           const el = document.getElementById('session-rest-timer');
           if (el) el.classList.remove('session-rest-bar--done');
           this._restInterval = setInterval(() => this._tickRestTimer(), 1000);
         }
         this._updateRestTimerDisplay();
+        this._updateTimerModal();
+        this._updateTimerBtn();
+        break;
+      }
+
+      case 'timer-adjust': {
+        const delta = parseInt(target.dataset.delta, 10);
+        if (!isNaN(delta)) {
+          this._restRemaining = Math.max(1, this._restRemaining + delta);
+          this._restTotal     = Math.max(this._restTotal, this._restRemaining);
+          if (!this._restInterval) {
+            document.getElementById('session-timer-modal')?.classList.remove('timer-modal--done');
+            this._restInterval = setInterval(() => this._tickRestTimer(), 1000);
+          }
+          this._updateRestTimerDisplay();
+          this._updateTimerModal();
+          this._updateTimerBtn();
+        }
+        break;
+      }
+
+      case 'open-timer-modal':
+        this._showTimerModal();
+        break;
+
+      case 'timer-modal-close':
+        document.getElementById('session-timer-modal')?.remove();
+        break;
+
+      case 'timer-preset': {
+        const secs = parseInt(target.dataset.seconds, 10);
+        if (!isNaN(secs)) {
+          document.getElementById('session-timer-modal')?.remove();
+          this._startRestTimer(secs, null, null);
+          this._showTimerModal();
+        }
+        break;
+      }
+
+      case 'timer-custom': {
+        const modal = document.getElementById('session-timer-modal');
+        if (!modal) break;
+        modal.innerHTML = `
+          <div class="timer-modal__header">
+            <button class="timer-modal__close" data-action="timer-modal-close"><i class="fa-solid fa-xmark"></i></button>
+            <span class="timer-modal__title">Minuteur personnalisé</span>
+            <span></span>
+          </div>
+          <div class="timer-modal__custom-form">
+            <label class="timer-modal__custom-label">Durée (minutes)</label>
+            <input class="timer-modal__custom-input" id="timer-custom-input" type="number" min="1" max="60" value="3" inputmode="numeric">
+            <button class="timer-modal__custom-start" data-action="timer-custom-start">DÉMARRER</button>
+          </div>`;
+        setTimeout(() => document.getElementById('timer-custom-input')?.focus(), 50);
+        break;
+      }
+
+      case 'timer-custom-start': {
+        const val = parseInt(document.getElementById('timer-custom-input')?.value, 10);
+        if (!isNaN(val) && val > 0) {
+          document.getElementById('session-timer-modal')?.remove();
+          this._startRestTimer(val * 60, null, null);
+          this._showTimerModal();
+        }
         break;
       }
     }
@@ -657,8 +721,14 @@ export default class SessionOverlay {
       set.isPR = false;
     }
 
-    // Stop any running timer when a set is uncompleted
-    if (!set.completed) {
+    if (set.completed) {
+      // Auto-start timer if the next row is a timer row (planned rest)
+      const nextSet = ex.sets[si + 1];
+      if (nextSet?.type === 'timer' && !nextSet.completed && !this._restInterval) {
+        this._startRestTimer(nextSet.duration ?? this._restDuration, exIdx, si + 1);
+      }
+    } else {
+      // Stop any running timer when a set is uncompleted
       this._stopRestTimer();
     }
 
@@ -1015,6 +1085,99 @@ export default class SessionOverlay {
   }
 
   // ---------------------------------------------------------------------------
+  // Timer modal — modale plein écran (image 7 : choix durée / image 8 : décompte)
+  // ---------------------------------------------------------------------------
+
+  _updateTimerBtn() {
+    const btn = this._overlay.querySelector('[data-action="open-timer-modal"]');
+    if (!btn) return;
+    if (this._restInterval || this._restRemaining > 0) {
+      btn.className = 'session__btn-timer session__btn-timer--running';
+      btn.innerHTML = `<i class="fa-regular fa-clock"></i> ${this._formatRestTime(this._restRemaining)}`;
+    } else {
+      btn.className = 'session__btn-timer';
+      btn.innerHTML = `<i class="fa-regular fa-clock"></i>`;
+    }
+  }
+
+  _showTimerModal() {
+    document.getElementById('session-timer-modal')?.remove();
+    const isRunning = !!this._restInterval || this._restRemaining > 0;
+    const modal = document.createElement('div');
+    modal.id        = 'session-timer-modal';
+    modal.className = 'timer-modal';
+    modal.innerHTML = isRunning ? this._buildTimerModalRunning() : this._buildTimerModalIdle();
+    this._overlay.appendChild(modal);
+  }
+
+  _buildTimerModalIdle() {
+    return `
+      <div class="timer-modal__header">
+        <button class="timer-modal__close" data-action="timer-modal-close"><i class="fa-solid fa-xmark"></i></button>
+        <span class="timer-modal__title">Minuteur de repos</span>
+        <i class="fa-regular fa-circle-question timer-modal__help"></i>
+      </div>
+      <p class="timer-modal__hint">Choisissez l'une des durées ci-dessous ou définissez votre propre durée. Les durées personnalisées sont enregistrées pour la prochaine fois.</p>
+      <div class="timer-modal__ring-wrap">
+        <svg class="timer-modal__svg" viewBox="0 0 220 220">
+          <circle class="timer-modal__track" cx="110" cy="110" r="100"/>
+        </svg>
+        <div class="timer-modal__presets">
+          <button class="timer-modal__preset" data-action="timer-preset" data-seconds="60">1:00</button>
+          <button class="timer-modal__preset" data-action="timer-preset" data-seconds="120">2:00</button>
+          <button class="timer-modal__preset" data-action="timer-preset" data-seconds="180">3:00</button>
+          <button class="timer-modal__preset" data-action="timer-preset" data-seconds="240">4:00</button>
+        </div>
+      </div>
+      <button class="timer-modal__custom-btn" data-action="timer-custom">CRÉER UN MINUTEUR PERSONNALISÉ</button>`;
+  }
+
+  _buildTimerModalRunning() {
+    const circ   = 628.32;
+    const offset = this._restTotal > 0
+      ? (circ * (1 - this._restRemaining / this._restTotal)).toFixed(1)
+      : '0';
+    return `
+      <div class="timer-modal__header">
+        <button class="timer-modal__close" data-action="timer-modal-close"><i class="fa-solid fa-xmark"></i></button>
+        <span class="timer-modal__title">Minuteur de repos</span>
+        <i class="fa-regular fa-circle-question timer-modal__help"></i>
+      </div>
+      <p class="timer-modal__hint">Ajustez la durée avec les boutons +/-.</p>
+      <div class="timer-modal__ring-wrap">
+        <svg class="timer-modal__svg" viewBox="0 0 220 220">
+          <circle class="timer-modal__track" cx="110" cy="110" r="100"/>
+          <circle class="timer-modal__progress" id="timer-modal-progress" cx="110" cy="110" r="100"
+                  stroke-dasharray="${circ}" stroke-dashoffset="${offset}"
+                  transform="rotate(-90 110 110)"/>
+        </svg>
+        <div class="timer-modal__countdown">
+          <span class="timer-modal__time" id="timer-modal-time">${this._formatRestTime(this._restRemaining)}</span>
+          <span class="timer-modal__total">${this._formatRestTime(this._restTotal)}</span>
+        </div>
+      </div>
+      <div class="timer-modal__actions">
+        <button class="timer-modal__adj" data-action="timer-adjust" data-delta="-30">- 30 S</button>
+        <button class="timer-modal__adj" data-action="timer-adjust" data-delta="30">+ 30 S</button>
+        <button class="timer-modal__skip" data-action="timer-skip">IGNORER</button>
+      </div>`;
+  }
+
+  _updateTimerModal() {
+    const timeEl = document.getElementById('timer-modal-time');
+    const progEl = document.getElementById('timer-modal-progress');
+    if (!timeEl && !progEl) return;
+    if (timeEl) timeEl.textContent = this._formatRestTime(this._restRemaining);
+    if (progEl) {
+      const circ   = 628.32;
+      const offset = this._restTotal > 0
+        ? (circ * (1 - this._restRemaining / this._restTotal)).toFixed(1)
+        : '0';
+      progEl.style.strokeDashoffset = offset;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Rest timer — barre inline dans le bloc exercice
   // ---------------------------------------------------------------------------
 
@@ -1026,6 +1189,7 @@ export default class SessionOverlay {
     this._restRemaining = seconds;
     this._restInterval  = setInterval(() => this._tickRestTimer(), 1000);
     this._insertRestTimerBar();
+    this._updateTimerBtn();
   }
 
   /** Suppression immédiate (bouton Ignorer) — réaffiche la ligne timer en idle */
@@ -1040,6 +1204,8 @@ export default class SessionOverlay {
     this._restExIdx     = null;
     this._restSi        = null;
     document.getElementById('session-rest-timer')?.remove();
+    document.getElementById('session-timer-modal')?.remove();
+    this._updateTimerBtn();
     // Re-render the exercise sets so the timer row returns to idle state
     if (exIdx !== null) this._reRenderSetsSection(exIdx);
   }
@@ -1055,6 +1221,7 @@ export default class SessionOverlay {
     this._restExIdx     = null;
     this._restSi        = null;
     document.getElementById('session-rest-timer')?.remove();
+    document.getElementById('session-timer-modal')?.remove();
   }
 
   _tickRestTimer() {
@@ -1063,6 +1230,8 @@ export default class SessionOverlay {
       clearInterval(this._restInterval);
       this._restInterval = null;
       this._updateRestTimerDisplay();
+      this._updateTimerModal();
+      this._updateTimerBtn();
       navigator.vibrate?.([200, 100, 200]);
 
       // Mark the timer set as completed
@@ -1073,17 +1242,24 @@ export default class SessionOverlay {
 
       const el = document.getElementById('session-rest-timer');
       if (el) el.classList.add('session-rest-bar--done');
+      document.getElementById('session-timer-modal')?.classList.add('timer-modal--done');
 
-      // After 2.5 s, replace bar with the done row
+      // After 2.5 s, replace bar with the done row and close modal
       setTimeout(() => {
         this._restExIdx = null;
         this._restSi    = null;
+        this._restRemaining = 0;
+        this._restTotal     = 0;
         document.getElementById('session-rest-timer')?.remove();
+        document.getElementById('session-timer-modal')?.remove();
+        this._updateTimerBtn();
         if (exIdx !== null) this._reRenderSetsSection(exIdx);
       }, 2500);
       return;
     }
     this._updateRestTimerDisplay();
+    this._updateTimerModal();
+    this._updateTimerBtn();
   }
 
   /**

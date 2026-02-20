@@ -51,12 +51,11 @@
 }
 
 /**
- * Minimize and reset icon buttons.
+ * Minimize icon button.
  * 40×40 tap targets with a fully-rounded shape; transparent background so
  * they appear to float on the header surface.
  */
-.session__btn-minimize,
-.session__btn-reset {
+.session__btn-minimize {
   width: 40px;
   height: 40px;
   border-radius: var(--radius-full);
@@ -73,9 +72,7 @@
 }
 
 .session__btn-minimize:hover,
-.session__btn-minimize:active,
-.session__btn-reset:hover,
-.session__btn-reset:active {
+.session__btn-minimize:active {
   opacity: 0.7;
 }
 
@@ -856,6 +853,272 @@
   opacity: 0.5;
 }
 
+
+/* ==========================================================================
+   10b. HEADER TIMER BUTTON — icône horloge / pill décompte
+   ========================================================================== */
+
+.session__btn-timer {
+  height: 36px;
+  min-width: 40px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-semi);
+  font-variant-numeric: tabular-nums;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s;
+}
+.session__btn-timer:active { opacity: 0.7; }
+.session__btn-timer--running {
+  background: var(--accent);
+  color: #fff;
+  padding: 0 var(--space-3);
+}
+
+/* ==========================================================================
+   10c. TIMER MODAL — minuteur plein écran (image 7 : choix / image 8 : ring)
+   ========================================================================== */
+
+.timer-modal {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+}
+
+.timer-modal__header {
+  display: flex;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  padding-top: calc(var(--space-3) + var(--safe-top));
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  height: calc(56px + var(--safe-top));
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.timer-modal__close {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: var(--text-base);
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.timer-modal__close:active { opacity: 0.7; }
+
+.timer-modal__title {
+  flex: 1;
+  font-size: var(--text-base);
+  font-weight: var(--fw-semi);
+  color: var(--text);
+}
+
+.timer-modal__help {
+  color: var(--text-muted);
+  font-size: var(--text-lg);
+}
+
+.timer-modal__hint {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  padding: var(--space-4);
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.timer-modal__ring-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 0;
+}
+
+.timer-modal__svg {
+  width: min(68vw, 300px);
+  height: min(68vw, 300px);
+}
+
+.timer-modal__track {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 8;
+}
+
+.timer-modal__progress {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.95s linear;
+}
+
+/* Preset buttons stacked inside ring (idle state) */
+.timer-modal__presets {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.timer-modal__preset {
+  width: 120px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  font-weight: var(--fw-semi);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s;
+}
+.timer-modal__preset:active { opacity: 0.8; }
+
+/* Countdown inside ring (running state) */
+.timer-modal__countdown {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.timer-modal__time {
+  font-size: clamp(40px, 12vw, 64px);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1;
+  transition: color 0.3s;
+}
+
+.timer-modal__total {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Done state */
+.timer-modal--done .timer-modal__progress { stroke: var(--success); }
+.timer-modal--done .timer-modal__time     { color: var(--success); }
+
+/* Bottom action bar (running state) */
+.timer-modal__actions {
+  display: flex;
+  align-items: center;
+  padding: var(--space-4);
+  padding-bottom: calc(var(--space-4) + var(--safe-bottom, 0px));
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.timer-modal__adj {
+  flex: 1;
+  height: 44px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-semi);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.timer-modal__adj:active { opacity: 0.7; }
+
+.timer-modal__skip {
+  flex: 1.5;
+  height: 44px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.timer-modal__skip:active { opacity: 0.8; }
+
+/* Custom duration button (idle state) */
+.timer-modal__custom-btn {
+  margin: 0 var(--space-4) var(--space-4);
+  height: 48px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+
+/* Custom duration form */
+.timer-modal__custom-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-6);
+}
+
+.timer-modal__custom-label {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.timer-modal__custom-input {
+  width: 120px;
+  height: 56px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 32px;
+  font-weight: var(--fw-bold);
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.timer-modal__custom-start {
+  width: 200px;
+  height: 48px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: var(--text-base);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+}
 
 /* ==========================================================================
    11. REST TIMER — barre inline dans le tableau de séries
