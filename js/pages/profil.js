@@ -511,10 +511,10 @@ export default class ProfilPage {
 
     const itemsHtml = WIDGET_CATALOG.map(def => `
       <button class="widget-picker__item" data-widget-def-id="${escapeHtml(def.id)}">
-        <span class="widget-card__icon"><i class="${escapeHtml(def.icon)}"></i></span>
-        <div>
-          <strong>${escapeHtml(t(def.titleKey))}</strong>
-          <p>${escapeHtml(t(def.descKey))}</p>
+        <span class="widget-picker__item-icon"><i class="${escapeHtml(def.icon)}"></i></span>
+        <div style="flex:1;min-width:0;">
+          <div class="widget-picker__item-label">${escapeHtml(t(def.titleKey))}</div>
+          <div class="widget-picker__item-sub">${escapeHtml(t(def.descKey))}</div>
         </div>
       </button>`).join('');
 
