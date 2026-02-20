@@ -37,6 +37,12 @@ export default class SessionOverlay {
     this._timerInterval = null;
     this._handlers  = {};
 
+    // Rest timer state
+    this._restDuration  = 90;  // seconds, overridden from profile on session start
+    this._restRemaining = 0;
+    this._restTotal     = 0;
+    this._restInterval  = null;
+
     // Bind overlay events once in constructor using event delegation.
     // Since innerHTML is replaced on each _render(), using delegation on the
     // persistent element means handlers always work without re-attaching.
@@ -88,6 +94,9 @@ export default class SessionOverlay {
 
     // Precompute PR history
     this._computePRHistory(sessions);
+
+    // Rest duration from profile settings (default 90 s)
+    this._restDuration = profile?.settings?.restDuration ?? 90;
 
     // Precompute previous sets (using setting or default same_routine)
     const prevMode = profile?.settings?.previousSets || 'same_routine';
@@ -261,6 +270,11 @@ export default class SessionOverlay {
         </div>
       </div>`;
     // Event delegation handlers are already bound in constructor — no re-attach needed.
+
+    // Re-append rest timer if a countdown was already running
+    if (this._restInterval !== null) {
+      this._renderRestTimer(true);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -473,6 +487,23 @@ export default class SessionOverlay {
       case 'open-ex-menu':
         if (!isNaN(exIdx)) this._openExerciseMenu(exIdx);
         break;
+
+      case 'rest-skip':
+        this._stopRestTimer();
+        break;
+
+      case 'rest-add-time': {
+        this._restRemaining += 60;
+        this._restTotal = Math.max(this._restTotal, this._restRemaining);
+        // If timer had already expired, restart the interval
+        if (!this._restInterval) {
+          const el = document.getElementById('session-rest-timer');
+          if (el) el.classList.remove('session-rest-timer--done');
+          this._restInterval = setInterval(() => this._tickRestTimer(), 1000);
+        }
+        this._updateRestTimerDisplay();
+        break;
+      }
     }
   }
 
@@ -497,6 +528,13 @@ export default class SessionOverlay {
       }
     } else {
       set.isPR = false;
+    }
+
+    // Start / stop rest timer based on completion state
+    if (set.completed && set.type !== 'warmup') {
+      this._startRestTimer(this._restDuration);
+    } else if (!set.completed) {
+      this._stopRestTimer();
     }
 
     // Targeted DOM update of the set row only — preserves focus on other inputs
@@ -677,6 +715,7 @@ export default class SessionOverlay {
 
   _cancelSession() {
     this._stopTimer();
+    this._stopRestTimerImmediate();
     setState('activeSession', null);
     this._session   = null;
     this._prevSets  = {};
@@ -691,6 +730,7 @@ export default class SessionOverlay {
 
   async _finishSession() {
     this._stopTimer();
+    this._stopRestTimerImmediate();
 
     const endTime  = Date.now();
     const duration = Math.floor((endTime - this._session.startTime) / 1000);
@@ -847,6 +887,121 @@ export default class SessionOverlay {
         document.dispatchEvent(new CustomEvent('session-complete', { bubbles: true }));
       }
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rest timer (inter-set countdown)
+  // ---------------------------------------------------------------------------
+
+  _startRestTimer(seconds) {
+    this._stopRestTimerImmediate();
+    this._restTotal     = seconds;
+    this._restRemaining = seconds;
+    this._restInterval  = setInterval(() => this._tickRestTimer(), 1000);
+    this._renderRestTimer(false);
+  }
+
+  /** Animated slide-out (used by Skip button) */
+  _stopRestTimer() {
+    if (this._restInterval) {
+      clearInterval(this._restInterval);
+      this._restInterval = null;
+    }
+    this._restRemaining = 0;
+    this._restTotal     = 0;
+    const el = document.getElementById('session-rest-timer');
+    if (el) {
+      el.classList.remove('session-rest-timer--visible');
+      setTimeout(() => el.remove(), 350);
+    }
+  }
+
+  /** Instant removal (used during cancel / finish cleanup) */
+  _stopRestTimerImmediate() {
+    if (this._restInterval) {
+      clearInterval(this._restInterval);
+      this._restInterval = null;
+    }
+    this._restRemaining = 0;
+    this._restTotal     = 0;
+    document.getElementById('session-rest-timer')?.remove();
+  }
+
+  _tickRestTimer() {
+    this._restRemaining = Math.max(0, this._restRemaining - 1);
+    if (this._restRemaining <= 0) {
+      clearInterval(this._restInterval);
+      this._restInterval = null;
+      this._updateRestTimerDisplay();
+      navigator.vibrate?.([200, 100, 200]);
+      const el = document.getElementById('session-rest-timer');
+      if (el) el.classList.add('session-rest-timer--done');
+      // Auto-dismiss after 2.5 s
+      setTimeout(() => {
+        const el2 = document.getElementById('session-rest-timer');
+        if (el2) {
+          el2.classList.remove('session-rest-timer--visible');
+          setTimeout(() => el2.remove(), 350);
+        }
+      }, 2500);
+      return;
+    }
+    this._updateRestTimerDisplay();
+  }
+
+  _renderRestTimer(skipAnimation = false) {
+    document.getElementById('session-rest-timer')?.remove();
+    const el = document.createElement('div');
+    el.id        = 'session-rest-timer';
+    el.className = 'session-rest-timer';
+    this._overlay.appendChild(el);
+
+    const C = 276.46; // 2π × 44
+    const ratio  = this._restTotal > 0 ? this._restRemaining / this._restTotal : 1;
+    const offset = C * (1 - ratio);
+
+    el.innerHTML = `
+      <div class="session-rest-timer__inner">
+        <button class="session-rest-timer__btn" data-action="rest-skip">
+          <i class="fa-solid fa-forward-step"></i>
+          <span>Passer</span>
+        </button>
+        <div class="session-rest-timer__ring-wrap">
+          <svg class="session-rest-timer__svg" viewBox="0 0 100 100" aria-hidden="true">
+            <circle class="session-rest-timer__track" cx="50" cy="50" r="44"/>
+            <circle class="session-rest-timer__fill" id="session-rest-ring" cx="50" cy="50" r="44"
+              style="stroke-dasharray:${C};stroke-dashoffset:${offset};"/>
+          </svg>
+          <div class="session-rest-timer__time" id="session-rest-time">${this._formatRestTime(this._restRemaining)}</div>
+        </div>
+        <button class="session-rest-timer__btn" data-action="rest-add-time">
+          <i class="fa-solid fa-plus"></i>
+          <span>+1:00</span>
+        </button>
+      </div>`;
+
+    if (skipAnimation) {
+      el.classList.add('session-rest-timer--visible');
+    } else {
+      requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('session-rest-timer--visible')));
+    }
+  }
+
+  _updateRestTimerDisplay() {
+    const timeEl = document.getElementById('session-rest-time');
+    const ringEl = document.getElementById('session-rest-ring');
+    if (timeEl) timeEl.textContent = this._formatRestTime(this._restRemaining);
+    if (ringEl) {
+      const C = 276.46;
+      const ratio  = this._restTotal > 0 ? this._restRemaining / this._restTotal : 0;
+      ringEl.style.strokeDashoffset = String(C * (1 - ratio));
+    }
+  }
+
+  _formatRestTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
   }
 
   // ---------------------------------------------------------------------------
