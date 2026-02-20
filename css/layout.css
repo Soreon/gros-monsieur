@@ -38,6 +38,21 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Slide depuis la droite (navigation vers un onglet suivant) */
+@keyframes page-slide-right {
+  from { opacity: 0; transform: translateX(28px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Slide depuis la gauche (navigation vers un onglet précédent) */
+@keyframes page-slide-left {
+  from { opacity: 0; transform: translateX(-28px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.page--slide-right { animation: page-slide-right var(--duration) var(--ease-out); }
+.page--slide-left  { animation: page-slide-left  var(--duration) var(--ease-out); }
+
 /* ── En-tête de page ── */
 .page-header {
   display: flex;

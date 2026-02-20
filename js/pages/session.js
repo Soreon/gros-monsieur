@@ -516,6 +516,9 @@ export default class SessionOverlay {
     const set = ex.sets[si];
     set.completed = !set.completed;
 
+    // Haptic feedback on completion
+    if (set.completed) navigator.vibrate?.(40);
+
     if (set.completed && set.weight > 0 && set.reps > 0) {
       // Check for PR
       const e1rm = set.weight * (1 + set.reps / 30);

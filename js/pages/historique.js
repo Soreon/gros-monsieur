@@ -71,6 +71,14 @@ export default class HistoriquePage {
     }
     this._handlers = {};
     this._clearPressTimer();
+
+    // Remove pull-to-refresh listeners
+    if (this._ptrHandlers) {
+      this.container.removeEventListener('touchstart', this._ptrHandlers.onTouchStart);
+      this.container.removeEventListener('touchmove',  this._ptrHandlers.onTouchMove);
+      this.container.removeEventListener('touchend',   this._ptrHandlers.onTouchEnd);
+      this._ptrHandlers = null;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -134,6 +142,9 @@ export default class HistoriquePage {
 
     this.container.innerHTML = `
       <div class="page">
+        <div id="ptr-indicator" class="ptr-indicator">
+          <i class="fa-solid fa-arrow-down ptr-indicator__icon"></i>
+        </div>
         <div class="page-header">
           <h1 class="page-title">${t('history.title')}</h1>
         </div>
@@ -190,6 +201,9 @@ export default class HistoriquePage {
   _bindListEvents() {
     const list = this.container.querySelector('.hist-list');
     if (!list) return;
+
+    // ---- Pull-to-refresh ----
+    this._initPullToRefresh();
 
     // ---- Long-press via pointer events ----
     list.addEventListener('pointerdown', e => {
@@ -250,6 +264,68 @@ export default class HistoriquePage {
       this._pressingCard.classList.remove('hist-card--pressing');
       this._pressingCard = null;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pull-to-refresh
+  // ---------------------------------------------------------------------------
+
+  _initPullToRefresh() {
+    const container  = this.container;  // scrollable element
+    const THRESHOLD  = 60;              // px to pull before releasing triggers refresh
+
+    let startY      = 0;
+    let pulling     = false;
+    let refreshing  = false;
+
+    const indicator = document.getElementById('ptr-indicator');
+    if (!indicator) return;
+
+    const onTouchStart = (e) => {
+      if (container.scrollTop > 0 || refreshing) return;
+      startY  = e.touches[0].clientY;
+      pulling = true;
+    };
+
+    const onTouchMove = (e) => {
+      if (!pulling || refreshing) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy <= 0) { pulling = false; return; }
+
+      // Prevent the browser's native pull-to-refresh
+      if (e.cancelable) e.preventDefault();
+
+      const ready = dy >= THRESHOLD;
+      indicator.classList.toggle('ptr-indicator--pulling', true);
+      indicator.classList.toggle('ptr-indicator--ready', ready);
+    };
+
+    const onTouchEnd = async () => {
+      if (!pulling || refreshing) return;
+      pulling = false;
+
+      const ready = indicator.classList.contains('ptr-indicator--ready');
+      indicator.classList.remove('ptr-indicator--pulling', 'ptr-indicator--ready');
+
+      if (!ready) return;
+
+      // Show spinner while refreshing
+      refreshing = true;
+      indicator.classList.add('ptr-indicator--refreshing');
+      indicator.innerHTML = '<div class="ptr-indicator__spinner"></div>';
+
+      await this._loadSessions();
+      this._render();
+      // _render() replaces the whole container HTML, so no need to clean up
+      refreshing = false;
+    };
+
+    container.addEventListener('touchstart', onTouchStart, { passive: true });
+    container.addEventListener('touchmove',  onTouchMove,  { passive: false });
+    container.addEventListener('touchend',   onTouchEnd,   { passive: true });
+
+    // Store refs for destroy()
+    this._ptrHandlers = { onTouchStart, onTouchMove, onTouchEnd };
   }
 
   // ---------------------------------------------------------------------------

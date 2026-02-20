@@ -6,6 +6,49 @@
 
 
 /* ============================================================
+   0. PULL-TO-REFRESH
+   ============================================================ */
+
+.ptr-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 0;
+  overflow: hidden;
+  transition: height var(--duration-fast) var(--ease);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.ptr-indicator--pulling {
+  height: 44px;
+}
+
+.ptr-indicator--refreshing {
+  height: 44px;
+}
+
+.ptr-indicator__spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.ptr-indicator__icon {
+  font-size: 18px;
+  color: var(--accent);
+  transition: transform var(--duration) var(--ease);
+}
+
+.ptr-indicator--ready .ptr-indicator__icon {
+  transform: rotate(180deg);
+}
+
+
+/* ============================================================
    1. EN-TETE DE MOIS (sticky section header)
    ============================================================ */
 

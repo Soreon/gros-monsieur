@@ -2,6 +2,11 @@
  * Router — Gros Monsieur
  * Routeur SPA hash-based simple.
  * Routes : #profil | #historique | #entrainement | #exercices | #mesurer
+ *
+ * Phase 10 additions:
+ *  - Scroll restoration : mémorise le scrollTop par route, le restaure à la navigation retour.
+ *  - Animations directionnelles : slide-right quand on navigue vers un onglet de droite,
+ *    slide-left vers un onglet de gauche, basé sur l'ordre de la bottom nav.
  */
 
 const ROUTES = {
@@ -12,9 +17,16 @@ const ROUTES = {
   'mesurer':      () => import('./pages/mesurer.js'),
 };
 
+/** Ordre des onglets — détermine la direction de l'animation de transition. */
+const ROUTE_ORDER = ['profil', 'historique', 'entrainement', 'exercices', 'mesurer'];
+
 const DEFAULT_ROUTE = 'profil';
 
-let currentPage = null;
+let currentPage  = null;
+let currentRoute = null;
+
+/** Positions de scroll mémorisées par route. */
+const _scrollPositions = {};
 
 /** Initialise le routeur. Doit être appelé après le rendu de la nav. */
 export function initRouter() {
@@ -44,9 +56,22 @@ export function getCurrentRoute() {
 
 /** Charge et affiche la page correspondant au hash actuel. */
 async function handleRoute() {
-  const route = getCurrentRoute();
+  const route  = getCurrentRoute();
   const loader = ROUTES[route] ?? ROUTES[DEFAULT_ROUTE];
   const container = document.getElementById('page-container');
+
+  // ── Direction de l'animation ──────────────────────────────────────────────
+  const prevIdx = ROUTE_ORDER.indexOf(currentRoute);
+  const nextIdx = ROUTE_ORDER.indexOf(route);
+  let direction = 'none';
+  if (prevIdx !== -1 && nextIdx !== -1 && prevIdx !== nextIdx) {
+    direction = nextIdx > prevIdx ? 'right' : 'left';
+  }
+
+  // ── Mémorise le scroll de la page sortante ────────────────────────────────
+  if (currentRoute) {
+    _scrollPositions[currentRoute] = container.scrollTop;
+  }
 
   // Met à jour la nav active
   document.querySelectorAll('.bottom-nav__item').forEach(item => {
@@ -58,6 +83,7 @@ async function handleRoute() {
     // Détruit la page courante
     if (currentPage?.destroy) currentPage.destroy();
     container.innerHTML = '';
+    currentRoute = route;
 
     // Charge et instancie la nouvelle page
     const module = await loader();
@@ -65,8 +91,19 @@ async function handleRoute() {
     currentPage = new PageClass(container);
     await currentPage.render();
 
-    // Remet le scroll en haut
-    container.scrollTop = 0;
+    // ── Animation directionnelle ──────────────────────────────────────────
+    const pageEl = container.querySelector('.page');
+    if (pageEl && direction !== 'none') {
+      pageEl.classList.add(`page--slide-${direction}`);
+      // Retire la classe après l'animation pour ne pas interférer
+      pageEl.addEventListener('animationend', () => {
+        pageEl.classList.remove(`page--slide-${direction}`);
+      }, { once: true });
+    }
+
+    // ── Restaure le scroll ────────────────────────────────────────────────
+    const savedScroll = _scrollPositions[route] ?? 0;
+    container.scrollTop = savedScroll;
   } catch (err) {
     console.error('[Router] Erreur de chargement de page :', err);
     container.innerHTML = `
