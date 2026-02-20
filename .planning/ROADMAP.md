@@ -6,34 +6,41 @@
 ---
 
 ## Phase 1 — Fondations & Shell PWA
-**Commit** : `feat: fondations PWA — shell, navigation, thème, routeur`
+**Commit** : `feat: fondations PWA — shell, navigation, thème, i18n, routeur`
 
 ### Objectif
-Poser les bases techniques de l'app : structure HTML, système de thème, navigation et routing SPA, manifest PWA et service worker minimal.
+Poser les bases techniques de l'app : structure HTML, système de thème clair/sombre, i18n, navigation et routing SPA, Font Awesome Pro, manifest PWA et service worker minimal.
 
 ### Tâches
-- [ ] Créer `index.html` — shell SPA avec zones de contenu
-- [ ] Créer `css/variables.css` — custom properties (couleurs, espacements, transitions)
+- [ ] Créer `index.html` — shell SPA, balise `<html data-theme="dark">`, lien kit FA Pro
+- [ ] Créer `css/variables.css` — custom properties pour thème sombre **et** clair (`[data-theme="light"]`)
 - [ ] Créer `css/reset.css` — reset CSS minimal
 - [ ] Créer `css/layout.css` — layout principal, bottom nav, zone de contenu
 - [ ] Créer `css/components.css` — composants de base (boutons, inputs, cartes)
-- [ ] Créer `js/router.js` — routeur hash-based (#/profil, #/historique, etc.)
-- [ ] Créer `js/app.js` — initialisation de l'app
+- [ ] Créer `js/i18n.js` — fonction `t(key, vars)`, chargement dynamique des locales
+- [ ] Créer `js/data/locales/fr.js` — toutes les clés de traduction FR
+- [ ] Créer `js/data/locales/en.js` — traductions EN (référence pour extensibilité)
+- [ ] Créer `js/router.js` — routeur hash-based (`#/profil`, `#/historique`, etc.)
+- [ ] Créer `js/app.js` — init : thème, i18n, DB, routeur
 - [ ] Créer `manifest.json` — nom, icônes, couleurs PWA
-- [ ] Créer `sw.js` — service worker (cache shell)
-- [ ] Créer `js/components/bottom-nav.js` — barre de navigation 5 onglets
+- [ ] Créer `sw.js` — service worker (cache shell + kit FA Pro)
+- [ ] Créer `js/components/bottom-nav.js` — barre de navigation 5 onglets avec icônes FA
 - [ ] Générer icônes PWA (192×192, 512×512) — placeholders SVG
 
+### ⚠ Prérequis Font Awesome Pro
+> Avant de démarrer : fournir l'URL du kit FA Pro (`https://kit.fontawesome.com/XXXXXXXX.js`).
+> Le service worker mettra ce fichier en cache pour le mode offline.
+
 ### Résultat attendu
-Shell navigable avec les 5 onglets fonctionnels (pages vides), installable comme PWA, thème sombre appliqué.
+Shell navigable avec les 5 onglets fonctionnels (pages vides), thème clair/sombre commutable sans rechargement, textes en français via i18n, installable comme PWA.
 
 ---
 
 ## Phase 2 — Couche données (IndexedDB)
-**Commit** : `feat: couche données — IndexedDB, modèles, seed exercices`
+**Commit** : `feat: couche données — IndexedDB, modèles, seed exercices, i18n clés`
 
 ### Objectif
-Mettre en place la persistance locale, les modèles de données, et pré-remplir la bibliothèque d'exercices.
+Mettre en place la persistance locale, les modèles de données, et pré-remplir la bibliothèque d'exercices. Compléter les clés i18n pour toutes les pages.
 
 ### Tâches
 - [ ] Créer `js/db.js` — wrapper IndexedDB (open, get, put, delete, getAll, query)
@@ -42,6 +49,7 @@ Mettre en place la persistance locale, les modèles de données, et pré-remplir
 - [ ] Créer `js/data/exercises-seed.js` — ~100 exercices (nom FR, catégorie, groupe musculaire)
 - [ ] Créer `js/utils/helpers.js` — fonctions utilitaires (dates, formatage, uid)
 - [ ] Créer `js/utils/export.js` — export JSON + import JSON avec validation
+- [ ] Compléter `fr.js` et `en.js` avec toutes les clés des pages à venir
 
 ### Seed exercices (catégories)
 | Catégorie | Exemples |
@@ -188,40 +196,38 @@ Suivi des mesures corporelles avec historique.
   - Apport calorique
 - [ ] Section mesures corporelles :
   - Cou, Épaules, Pectoraux, Biceps gauche, Biceps droit, Avant-bras gauche, Avant-bras droit, Taille, Hanches, Cuisse gauche, Cuisse droite, Mollet gauche, Mollet droit
-- [ ] Tap sur une métrique → modal d'entrée + historique (mini-graphique)
-- [ ] Historique des entrées (liste datée)
-- [ ] Mini-graphique évolution (Canvas)
+- [ ] Tap sur une métrique → modal d'entrée de valeur
+- [ ] Historique des entrées (liste datée, valeur + delta par rapport à la précédente)
 
 ### Résultat attendu
-Suivi complet des mesures avec historique visuel.
+Suivi complet des mesures avec historique textuel (pas de graphique dans cette phase).
 
 ---
 
 ## Phase 8 — Page Profil & Dashboard
-**Commit** : `feat: profil — dashboard widgets, graphiques`
+**Commit** : `feat: profil — dashboard widgets, stats textuelles`
 
 ### Objectif
-Page d'accueil personnalisable avec stats et graphiques.
+Page d'accueil avec statistiques clés. Pas de graphiques dans cette phase : les stats sont affichées sous forme de chiffres et de listes. Les graphiques pourront être ajoutés dans une phase ultérieure.
 
 ### Tâches
 - [ ] Créer `js/pages/profil.js`
 - [ ] Créer `css/pages/profil.css`
-- [ ] Créer `js/components/chart.js` — moteur graphiques Canvas
 - [ ] Header profil : avatar (initiales par défaut), nom, nombre total d'entraînements
 - [ ] Bouton ⚙ → paramètres
 - [ ] Section "Tableau de bord" avec bouton + (ajouter widget)
-- [ ] Widgets disponibles :
-  - **Entraînements par semaine** : bar chart (8 semaines)
-  - **Progression exercice** : line chart (1RM estimé ou meilleure série)
-  - **Calories cette semaine**
-  - **Macros quotidiennes**
-  - **Mesurer** : valeur actuelle d'une métrique
+- [ ] Widgets disponibles (affichage textuel / chiffres) :
+  - **Entraînements par semaine** : nombre d'entraînements des 7 derniers jours + liste des jours actifs
+  - **Progression exercice** : meilleure série actuelle vs il y a 30 jours (chiffre + delta)
+  - **Calories cette semaine** : total kcal saisis cette semaine
+  - **Macros quotidiennes** : (réservé pour plus tard — placeholder)
+  - **Mesurer** : valeur actuelle d'une métrique corporelle + delta
 - [ ] Panel "Ajouter un widget" (liste des widgets disponibles)
-- [ ] Suppression de widget (bouton ⋮ ou swipe)
+- [ ] Suppression de widget (bouton ⋮)
 - [ ] Persistance de la configuration du dashboard
 
 ### Résultat attendu
-Dashboard personnalisable avec graphiques fonctionnels.
+Dashboard personnalisable avec statistiques textuelles pertinentes. Prêt pour l'ajout de graphiques ultérieurement.
 
 ---
 
@@ -282,13 +288,13 @@ Rendre l'app vraiment native : cache offline, install prompt, polish UI.
 
 | Phase | Contenu | Commit |
 |---|---|---|
-| 1 | Shell + Navigation + PWA base | `feat: fondations PWA` |
-| 2 | IndexedDB + Modèles + Seed | `feat: couche données` |
-| 3 | Page Exercices | `feat: page exercices` |
-| 4 | Routines | `feat: routines` |
-| 5 | Session active | `feat: session active` |
-| 6 | Historique | `feat: historique` |
-| 7 | Mesures corporelles | `feat: mesurer` |
-| 8 | Profil + Dashboard | `feat: profil dashboard` |
-| 9 | Paramètres | `feat: paramètres` |
-| 10 | PWA avancée + polish | `feat: PWA polish` |
+| 1 | Shell + Navigation + Thème clair/sombre + i18n + FA Pro + PWA base | `feat: fondations PWA` |
+| 2 | IndexedDB + Modèles + Seed exercices + Clés i18n complètes | `feat: couche données` |
+| 3 | Page Exercices (liste, filtres, création) | `feat: page exercices` |
+| 4 | Routines (liste, création, édition) | `feat: routines` |
+| 5 | Session active (timer, log séries, PRs) | `feat: session active` |
+| 6 | Historique des séances | `feat: historique` |
+| 7 | Mesures corporelles (sans graphiques) | `feat: mesurer` |
+| 8 | Profil + Dashboard (stats textuelles, sans graphiques) | `feat: profil dashboard` |
+| 9 | Paramètres (thème, i18n, préférences, export/import) | `feat: paramètres` |
+| 10 | PWA avancée + polish + cache FA Pro offline | `feat: PWA polish` |
