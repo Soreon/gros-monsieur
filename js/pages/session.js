@@ -37,13 +37,18 @@ export default class SessionOverlay {
     this._timerInterval = null;
     this._handlers  = {};
 
-    // Rest timer state
+    // Inline rest timer state (barre dans les séries, indépendant)
     this._restDuration  = 90;  // seconds, overridden from profile on session start
     this._restRemaining = 0;
     this._restTotal     = 0;
     this._restInterval  = null;
     this._restExIdx     = null; // exercise index that triggered the current rest
     this._restSi        = null;        // set index of the active timer row
+
+    // Global timer state (pill header + modale, indépendant)
+    this._globalInterval  = null;
+    this._globalRemaining = 0;
+    this._globalTotal     = 0;
 
     // Bind overlay events once in constructor using event delegation.
     // Since innerHTML is replaced on each _render(), using delegation on the
@@ -247,8 +252,8 @@ export default class SessionOverlay {
           <button class="btn btn--icon session__btn-minimize" data-action="minimize" aria-label="Réduire">
             <i class="fa-solid fa-chevron-down"></i>
           </button>
-          <button class="session__btn-timer${this._restInterval ? ' session__btn-timer--running' : ''}" data-action="open-timer-modal" aria-label="Minuteur de repos">
-            <i class="fa-regular fa-clock"></i>${this._restInterval ? ` ${this._formatRestTime(this._restRemaining)}` : ''}
+          <button class="session__btn-timer${this._globalInterval ? ' session__btn-timer--running' : ''}" data-action="open-timer-modal" aria-label="Minuteur de repos">
+            <i class="fa-regular fa-clock"></i>${this._globalInterval ? ` ${this._formatRestTime(this._globalRemaining)}` : ''}
           </button>
           <span class="session__timer" id="session-timer">${this._formatElapsed(this._elapsed)}</span>
           <button class="session__btn-finish" data-action="finish">
@@ -538,8 +543,8 @@ export default class SessionOverlay {
         if (!isNaN(exIdx)) this._openExerciseMenu(exIdx);
         break;
 
+      // Inline rest bar controls
       case 'rest-skip':
-      case 'timer-skip':
         this._stopRestTimer();
         break;
 
@@ -552,22 +557,24 @@ export default class SessionOverlay {
           this._restInterval = setInterval(() => this._tickRestTimer(), 1000);
         }
         this._updateRestTimerDisplay();
-        this._updateTimerModal();
-        this._updateTimerBtn();
         break;
       }
+
+      // Global timer modal controls
+      case 'timer-skip':
+        this._stopGlobalTimer();
+        break;
 
       case 'timer-adjust': {
         const delta = parseInt(target.dataset.delta, 10);
         if (!isNaN(delta)) {
-          this._restRemaining = Math.max(1, this._restRemaining + delta);
-          this._restTotal     = Math.max(this._restTotal, this._restRemaining);
-          if (!this._restInterval) {
+          this._globalRemaining = Math.max(1, this._globalRemaining + delta);
+          this._globalTotal     = Math.max(this._globalTotal, this._globalRemaining);
+          if (!this._globalInterval) {
             document.getElementById('session-timer-modal')?.classList.remove('timer-modal--done');
-            this._restInterval = setInterval(() => this._tickRestTimer(), 1000);
+            this._globalInterval = setInterval(() => this._tickGlobalTimer(), 1000);
           }
-          this._updateRestTimerDisplay();
-          this._updateTimerModal();
+          this._updateGlobalTimerModal();
           this._updateTimerBtn();
         }
         break;
@@ -584,8 +591,7 @@ export default class SessionOverlay {
       case 'timer-preset': {
         const secs = parseInt(target.dataset.seconds, 10);
         if (!isNaN(secs)) {
-          document.getElementById('session-timer-modal')?.remove();
-          this._startRestTimer(secs, null, null);
+          this._startGlobalTimer(secs);
           this._showTimerModal();
         }
         break;
@@ -612,8 +618,7 @@ export default class SessionOverlay {
       case 'timer-custom-start': {
         const val = parseInt(document.getElementById('timer-custom-input')?.value, 10);
         if (!isNaN(val) && val > 0) {
-          document.getElementById('session-timer-modal')?.remove();
-          this._startRestTimer(val * 60, null, null);
+          this._startGlobalTimer(val * 60);
           this._showTimerModal();
         }
         break;
@@ -1086,14 +1091,58 @@ export default class SessionOverlay {
 
   // ---------------------------------------------------------------------------
   // Timer modal — modale plein écran (image 7 : choix durée / image 8 : décompte)
+  // Entièrement indépendant du timer inline (_restInterval).
   // ---------------------------------------------------------------------------
+
+  _startGlobalTimer(seconds) {
+    if (this._globalInterval) {
+      clearInterval(this._globalInterval);
+      this._globalInterval = null;
+    }
+    this._globalTotal     = seconds;
+    this._globalRemaining = seconds;
+    this._globalInterval  = setInterval(() => this._tickGlobalTimer(), 1000);
+    this._updateTimerBtn();
+  }
+
+  _stopGlobalTimer() {
+    if (this._globalInterval) {
+      clearInterval(this._globalInterval);
+      this._globalInterval = null;
+    }
+    this._globalRemaining = 0;
+    this._globalTotal     = 0;
+    document.getElementById('session-timer-modal')?.remove();
+    this._updateTimerBtn();
+  }
+
+  _tickGlobalTimer() {
+    this._globalRemaining = Math.max(0, this._globalRemaining - 1);
+    if (this._globalRemaining <= 0) {
+      clearInterval(this._globalInterval);
+      this._globalInterval = null;
+      this._updateGlobalTimerModal();
+      this._updateTimerBtn();
+      navigator.vibrate?.([200, 100, 200]);
+      document.getElementById('session-timer-modal')?.classList.add('timer-modal--done');
+      setTimeout(() => {
+        this._globalRemaining = 0;
+        this._globalTotal     = 0;
+        document.getElementById('session-timer-modal')?.remove();
+        this._updateTimerBtn();
+      }, 2500);
+      return;
+    }
+    this._updateGlobalTimerModal();
+    this._updateTimerBtn();
+  }
 
   _updateTimerBtn() {
     const btn = this._overlay.querySelector('[data-action="open-timer-modal"]');
     if (!btn) return;
-    if (this._restInterval || this._restRemaining > 0) {
+    if (this._globalInterval || this._globalRemaining > 0) {
       btn.className = 'session__btn-timer session__btn-timer--running';
-      btn.innerHTML = `<i class="fa-regular fa-clock"></i> ${this._formatRestTime(this._restRemaining)}`;
+      btn.innerHTML = `<i class="fa-regular fa-clock"></i> ${this._formatRestTime(this._globalRemaining)}`;
     } else {
       btn.className = 'session__btn-timer';
       btn.innerHTML = `<i class="fa-regular fa-clock"></i>`;
@@ -1102,7 +1151,7 @@ export default class SessionOverlay {
 
   _showTimerModal() {
     document.getElementById('session-timer-modal')?.remove();
-    const isRunning = !!this._restInterval || this._restRemaining > 0;
+    const isRunning = !!this._globalInterval || this._globalRemaining > 0;
     const modal = document.createElement('div');
     modal.id        = 'session-timer-modal';
     modal.className = 'timer-modal';
@@ -1134,8 +1183,8 @@ export default class SessionOverlay {
 
   _buildTimerModalRunning() {
     const circ   = 628.32;
-    const offset = this._restTotal > 0
-      ? (circ * (1 - this._restRemaining / this._restTotal)).toFixed(1)
+    const offset = this._globalTotal > 0
+      ? (circ * (1 - this._globalRemaining / this._globalTotal)).toFixed(1)
       : '0';
     return `
       <div class="timer-modal__header">
@@ -1152,8 +1201,8 @@ export default class SessionOverlay {
                   transform="rotate(-90 110 110)"/>
         </svg>
         <div class="timer-modal__countdown">
-          <span class="timer-modal__time" id="timer-modal-time">${this._formatRestTime(this._restRemaining)}</span>
-          <span class="timer-modal__total">${this._formatRestTime(this._restTotal)}</span>
+          <span class="timer-modal__time" id="timer-modal-time">${this._formatRestTime(this._globalRemaining)}</span>
+          <span class="timer-modal__total">${this._formatRestTime(this._globalTotal)}</span>
         </div>
       </div>
       <div class="timer-modal__actions">
@@ -1163,15 +1212,15 @@ export default class SessionOverlay {
       </div>`;
   }
 
-  _updateTimerModal() {
+  _updateGlobalTimerModal() {
     const timeEl = document.getElementById('timer-modal-time');
     const progEl = document.getElementById('timer-modal-progress');
     if (!timeEl && !progEl) return;
-    if (timeEl) timeEl.textContent = this._formatRestTime(this._restRemaining);
+    if (timeEl) timeEl.textContent = this._formatRestTime(this._globalRemaining);
     if (progEl) {
       const circ   = 628.32;
-      const offset = this._restTotal > 0
-        ? (circ * (1 - this._restRemaining / this._restTotal)).toFixed(1)
+      const offset = this._globalTotal > 0
+        ? (circ * (1 - this._globalRemaining / this._globalTotal)).toFixed(1)
         : '0';
       progEl.style.strokeDashoffset = offset;
     }
@@ -1189,7 +1238,6 @@ export default class SessionOverlay {
     this._restRemaining = seconds;
     this._restInterval  = setInterval(() => this._tickRestTimer(), 1000);
     this._insertRestTimerBar();
-    this._updateTimerBtn();
   }
 
   /** Suppression immédiate (bouton Ignorer) — réaffiche la ligne timer en idle */
@@ -1204,9 +1252,6 @@ export default class SessionOverlay {
     this._restExIdx     = null;
     this._restSi        = null;
     document.getElementById('session-rest-timer')?.remove();
-    document.getElementById('session-timer-modal')?.remove();
-    this._updateTimerBtn();
-    // Re-render the exercise sets so the timer row returns to idle state
     if (exIdx !== null) this._reRenderSetsSection(exIdx);
   }
 
@@ -1221,7 +1266,6 @@ export default class SessionOverlay {
     this._restExIdx     = null;
     this._restSi        = null;
     document.getElementById('session-rest-timer')?.remove();
-    document.getElementById('session-timer-modal')?.remove();
   }
 
   _tickRestTimer() {
@@ -1230,8 +1274,6 @@ export default class SessionOverlay {
       clearInterval(this._restInterval);
       this._restInterval = null;
       this._updateRestTimerDisplay();
-      this._updateTimerModal();
-      this._updateTimerBtn();
       navigator.vibrate?.([200, 100, 200]);
 
       // Mark the timer set as completed
@@ -1242,24 +1284,19 @@ export default class SessionOverlay {
 
       const el = document.getElementById('session-rest-timer');
       if (el) el.classList.add('session-rest-bar--done');
-      document.getElementById('session-timer-modal')?.classList.add('timer-modal--done');
 
-      // After 2.5 s, replace bar with the done row and close modal
+      // After 2.5 s, replace bar with the done row
       setTimeout(() => {
-        this._restExIdx = null;
-        this._restSi    = null;
+        this._restExIdx     = null;
+        this._restSi        = null;
         this._restRemaining = 0;
         this._restTotal     = 0;
         document.getElementById('session-rest-timer')?.remove();
-        document.getElementById('session-timer-modal')?.remove();
-        this._updateTimerBtn();
         if (exIdx !== null) this._reRenderSetsSection(exIdx);
       }, 2500);
       return;
     }
     this._updateRestTimerDisplay();
-    this._updateTimerModal();
-    this._updateTimerBtn();
   }
 
   /**
