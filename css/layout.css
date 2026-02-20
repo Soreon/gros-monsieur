@@ -30,7 +30,7 @@
   padding-top: calc(var(--space-4) + var(--safe-top));
   max-width: var(--max-width);
   margin: 0 auto;
-  animation: page-in var(--duration) var(--ease-out);
+  /* Pas d'animation ici — appliquée via classe pour éviter le re-trigger au retrait de classe */
 }
 
 @keyframes page-in {
@@ -50,8 +50,10 @@
   to   { opacity: 1; transform: translateX(0); }
 }
 
-.page--slide-right { animation: page-slide-right var(--duration) var(--ease-out); }
-.page--slide-left  { animation: page-slide-left  var(--duration) var(--ease-out); }
+/* Toutes les animations de page sont appliquées via classe par le routeur */
+.page--enter       { animation: page-in          var(--duration) var(--ease-out); }
+.page--slide-right { animation: page-slide-right  var(--duration) var(--ease-out); }
+.page--slide-left  { animation: page-slide-left   var(--duration) var(--ease-out); }
 
 /* ── En-tête de page ── */
 .page-header {

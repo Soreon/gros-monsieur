@@ -92,13 +92,12 @@ async function handleRoute() {
     await currentPage.render();
 
     // ── Animation directionnelle ──────────────────────────────────────────
+    // On applique toujours une classe d'animation (jamais via CSS sur .page directement),
+    // et on ne la retire JAMAIS : le DOM est remplacé à la prochaine navigation de toute façon.
+    // Retirer la classe déclencherait un re-render de l'animation de base → flash visible.
     const pageEl = container.querySelector('.page');
-    if (pageEl && direction !== 'none') {
-      pageEl.classList.add(`page--slide-${direction}`);
-      // Retire la classe après l'animation pour ne pas interférer
-      pageEl.addEventListener('animationend', () => {
-        pageEl.classList.remove(`page--slide-${direction}`);
-      }, { once: true });
+    if (pageEl) {
+      pageEl.classList.add(direction !== 'none' ? `page--slide-${direction}` : 'page--enter');
     }
 
     // ── Restaure le scroll ────────────────────────────────────────────────
