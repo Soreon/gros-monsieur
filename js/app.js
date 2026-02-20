@@ -13,6 +13,7 @@
 import { initI18n } from './i18n.js';
 import { initRouter } from './router.js';
 import { BottomNav } from './components/bottom-nav.js';
+import { initDB, dbGetProfile } from './db.js';
 
 // ── 1. Thème ─────────────────────────────────────────────────
 // Appliqué immédiatement (avant le premier paint) depuis localStorage
@@ -59,20 +60,23 @@ async function init() {
   const savedLocale = localStorage.getItem('gm-locale') || 'fr';
   await initI18n(savedLocale);
 
-  // Resync le thème après chargement de la DB (phase 2)
-  // Pour l'instant on lit depuis localStorage
-  const savedTheme = localStorage.getItem('gm-theme') || 'dark';
+  // 3. Initialisation DB (seed exercices + profil par défaut)
+  await initDB();
+
+  // Sync le thème depuis le profil DB (priorité sur localStorage)
+  const profile = await dbGetProfile();
+  const savedTheme = profile?.theme ?? localStorage.getItem('gm-theme') ?? 'dark';
   setTheme(savedTheme);
 
-  // 3. Bottom nav
+  // 4. Bottom nav
   const navEl = document.getElementById('bottom-nav');
   const nav = new BottomNav(navEl);
   nav.render();
 
-  // 4. Routeur
+  // 5. Routeur
   initRouter();
 
-  // 5. Service Worker
+  // 6. Service Worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker
       .register('/sw.js')
