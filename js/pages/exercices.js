@@ -330,9 +330,8 @@ export default class ExercicesPage {
     // Fermer le menu contextuel en cliquant ailleurs
     this._handlers.docClick = (e) => {
       const menu = document.getElementById('ex-context-menu');
-      const btn  = document.getElementById('ex-btn-menu');
       if (menu && !menu.classList.contains('hidden')) {
-        if (!menu.contains(e.target) && e.target !== btn) {
+        if (!menu.contains(e.target) && !e.target.closest('#ex-btn-menu')) {
           menu.classList.add('hidden');
         }
       }
