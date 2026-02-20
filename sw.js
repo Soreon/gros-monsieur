@@ -4,7 +4,7 @@
  * Le shell et Font Awesome Pro sont mis en cache dès l'installation.
  */
 
-const CACHE_VERSION = 'gm-v2';
+const CACHE_VERSION = 'gm-v3';
 
 // Assets à mettre en cache lors de l'installation (app shell)
 const PRECACHE_ASSETS = [
@@ -15,6 +15,11 @@ const PRECACHE_ASSETS = [
   '/css/reset.css',
   '/css/layout.css',
   '/css/components.css',
+  '/css/pages/exercices.css',
+  '/css/pages/historique.css',
+  '/css/pages/entrainement.css',
+  '/css/pages/profil.css',
+  '/css/pages/mesurer.css',
   '/js/app.js',
   '/js/router.js',
   '/js/i18n.js',
