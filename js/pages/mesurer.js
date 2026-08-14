@@ -4,6 +4,7 @@
 
 import { t } from '../i18n.js';
 import { uid, formatDate, formatDateShort, escapeHtml } from '../utils/helpers.js';
+import { lineChart } from '../utils/chart.js';
 import {
   dbGetAllMeasurements,
   dbPutMeasurement,
@@ -311,6 +312,7 @@ export default class MesurerPage {
         .map((entry, idx) => this._historyEntryHtml(entry, entries, idx))
         .join('');
       contentHtml = `
+        ${this._historyChartHtml(entries, typeDef)}
         <div class="measure-history__list">
           ${rowsHtml}
         </div>`;
@@ -338,6 +340,30 @@ export default class MesurerPage {
       </div>`;
 
     this._bindHistoryEvents();
+  }
+
+  /**
+   * Builds the metric progression chart (value over time) shown above the
+   * history list. Returns '' when fewer than 2 entries exist.
+   * @param {object[]} entries - Entries for the selected type, date desc
+   * @param {object|undefined} typeDef - Type definition (for the unit)
+   * @returns {string} HTML (chart wrapper) or ''
+   */
+  _historyChartHtml(entries, typeDef) {
+    if (entries.length < 2) return '';
+
+    const points = entries
+      .map(e => ({ x: e.date, y: Number(e.value) }))
+      .reverse(); // date ascending
+
+    const unit = typeDef ? typeDef.unit : (entries[0].unit || '');
+    const svg  = lineChart(points, {
+      ariaLabel:   t('chart.progress_aria'),
+      formatValue: v => `${Math.round(v * 100) / 100}${unit ? ' ' + unit : ''}`,
+    });
+    if (!svg) return '';
+
+    return `<div class="measure-history__chart">${svg}</div>`;
   }
 
   /**

@@ -237,6 +237,27 @@
   padding-bottom: var(--space-2);
 }
 
+/**
+ * Graphique de progression de la métrique (SVG de js/utils/chart.js),
+ * affiché au-dessus de la liste d'historique. Carte au même motif
+ * que .measure-entry, sans le bord gauche accent.
+ */
+.measure-history__chart {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  box-sizing: border-box;
+  box-shadow: var(--shadow-sm);
+}
+
+.measure-history__chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 /* Liste des entrées */
 .measure-history__list {
   display: flex;

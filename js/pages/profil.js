@@ -14,7 +14,9 @@ import {
   startOfWeek,
   isSameDay,
   escapeHtml,
+  estimate1RM,
 } from '../utils/helpers.js';
+import { lineChart } from '../utils/chart.js';
 import {
   dbGetProfile,
   dbSaveProfile,
@@ -435,7 +437,45 @@ export default class ProfilPage {
 
     return `
       <div class="widget-progress__exercise">${name}</div>
-      ${rowsHtml}`;
+      ${rowsHtml}
+      ${this._exerciseProgressChart(exerciseId)}`;
+  }
+
+  /**
+   * Builds the e1RM progression chart for an exercise: max estimated 1RM
+   * (Epley) per session, across all sessions containing the exercise
+   * (completed non-timer sets only), limited to the 60 most recent points.
+   * Returns '' when fewer than 2 sessions have usable data.
+   * @param {string} exerciseId
+   * @returns {string} HTML (chart wrapper) or ''
+   */
+  _exerciseProgressChart(exerciseId) {
+    const points = this._sessions
+      .filter(s => Array.isArray(s.exercises))
+      .sort((a, b) => a.startTime - b.startTime)
+      .map(session => {
+        const exEntry = session.exercises.find(e => e.exerciseId === exerciseId);
+        if (!exEntry || !Array.isArray(exEntry.sets)) return null;
+        let best = 0;
+        for (const set of exEntry.sets) {
+          if (!set.completed || set.type === 'timer') continue;
+          const e1rm = estimate1RM(set.weight, set.reps);
+          if (e1rm > best) best = e1rm;
+        }
+        return best > 0 ? { x: session.startTime, y: best } : null;
+      })
+      .filter(Boolean)
+      .slice(-60);
+
+    if (points.length < 2) return '';
+
+    const svg = lineChart(points, {
+      ariaLabel:   t('chart.progress_aria'),
+      formatValue: v => `${v} kg`,
+    });
+    if (!svg) return '';
+
+    return `<div class="widget-chart">${svg}</div>`;
   }
 
   // ── weekly_calories ────────────────────────────────────────────────────────

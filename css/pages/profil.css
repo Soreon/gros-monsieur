@@ -423,6 +423,21 @@
 }
 
 /**
+ * Graphique de progression (SVG généré par js/utils/chart.js).
+ * Le SVG gère lui-même ses couleurs via les tokens ; on ne règle
+ * ici que l'espacement dans la carte.
+ */
+.widget-chart {
+  margin-top: var(--space-3);
+}
+
+.widget-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/**
  * Historique récent : rangée de petits points ou pastilles colorées
  * représentant les dernières sessions (JS injecte les dots).
  */
