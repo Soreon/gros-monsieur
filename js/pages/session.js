@@ -1,5 +1,5 @@
 import { t } from '../i18n.js';
-import { uid, formatDuration, formatDateShort } from '../utils/helpers.js';
+import { uid, formatDuration, formatDateShort, estimate1RM } from '../utils/helpers.js';
 import {
   dbGetAllExercises,
   dbGetAllSessions,
@@ -13,6 +13,9 @@ import {
 import { setState, getState } from '../store.js';
 
 const ICON_COLORS = ['#7c5cbf','#4caf7d','#e55353','#f0a030','#3b9dd4','#e0609a','#5bae8f','#d4873b'];
+
+// Clé localStorage du brouillon de séance active (persistance anti-crash/refresh)
+const DRAFT_KEY = 'gm-active-session';
 
 function colorForId(id) {
   let hash = 0;
@@ -32,23 +35,36 @@ export default class SessionOverlay {
     this._exercises = [];          // all non-archived exercises
     this._elapsed   = 0;          // seconds since session start
     this._minimized = false;
-    this._prevSets  = {};          // {exerciseId: [{weight,reps,type}]}
-    this._prHistory = {};          // {exerciseId: maxEstimated1RM}
+    this._prevSets  = {};          // {exerciseId: [{weight,reps,type}]} (séries complétées non-timer)
+    this._prHistory = {};          // {exerciseId: maxEstimated1RM} (historique + séance en cours)
+    this._basePRHistory = {};      // {exerciseId: maxEstimated1RM} (historique seul, pour rollback PR)
     this._timerInterval = null;
     this._handlers  = {};
+    this._settings  = {};          // profile.settings, chargé au start/resume
+    this._finishing = false;       // garde de réentrance de _finishSession
+    this._hideTimeout  = null;     // setTimeout de _hide() (annulé par _show())
+    this._draftTimeout = null;     // debounce de sauvegarde du brouillon
+    this._wakeLock     = null;     // Screen Wake Lock sentinel
+    this._audioCtx     = null;     // AudioContext lazy pour les bips (soundEffects)
 
     // Inline rest timer state (barre dans les séries, indépendant)
+    // Basé sur timestamp (_restEndsAt) : fiable même si setInterval est
+    // throttlé/suspendu en arrière-plan (mobile, écran verrouillé).
     this._restDuration  = 90;  // seconds, overridden from profile on session start
     this._restRemaining = 0;
     this._restTotal     = 0;
+    this._restEndsAt    = 0;    // timestamp (ms) de fin du décompte
     this._restInterval  = null;
-    this._restExIdx     = null; // exercise index that triggered the current rest
-    this._restSi        = null;        // set index of the active timer row
+    this._restDoneTimeout = null; // setTimeout de nettoyage post-fin (2.5 s)
+    this._restEx        = null; // référence de l'exercice (objet) qui a déclenché le repos
+    this._restSet       = null; // référence du set timer (objet) — insensible aux splice/reorder
 
     // Global timer state (pill header + modale, indépendant)
     this._globalInterval  = null;
     this._globalRemaining = 0;
     this._globalTotal     = 0;
+    this._globalEndsAt    = 0;    // timestamp (ms) de fin du décompte
+    this._globalDoneTimeout = null; // setTimeout de nettoyage post-fin (2.5 s)
 
     // Swipe-to-delete state
     this._swipeRow     = null;   // .session-set-row en cours de swipe
@@ -69,6 +85,7 @@ export default class SessionOverlay {
     this._reorderStartY    = 0;      // touch Y when drag started
     this._reorderStartIdx  = -1;
     this._reorderTargetIdx = -1;
+    this._reorderMids      = [];     // milieux (Y) des items capturés au début du drag
 
     // Bind overlay events once in constructor using event delegation.
     // Since innerHTML is replaced on each _render(), using delegation on the
@@ -80,6 +97,18 @@ export default class SessionOverlay {
     this._overlay.addEventListener('touchend',    e => this._onTouchEnd(e));
     this._overlay.addEventListener('touchcancel', e => this._onTouchCancel(e));
     this._bar.addEventListener('click', () => this._session && this._expand());
+
+    // Resynchronise les timers (basés timestamp) au retour au premier plan et
+    // ré-acquiert le wake lock (libéré par le navigateur en arrière-plan).
+    this._onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible' || !this._session) return;
+      this._syncElapsed();
+      this._updateTimerDisplay();
+      if (this._restInterval)   this._tickRestTimer();
+      if (this._globalInterval) this._tickGlobalTimer();
+      if (!this._minimized) this._acquireWakeLock();
+    };
+    document.addEventListener('visibilitychange', this._onVisibilityChange);
   }
 
   // ---------------------------------------------------------------------------
@@ -102,32 +131,40 @@ export default class SessionOverlay {
 
     const routine = routineId ? routines.find(r => r.id === routineId) : null;
 
+    // Garde défensive : routine introuvable ou sans exercices valides
+    const routineExercises = routine
+      ? (Array.isArray(routine.exercises) ? routine.exercises : [])
+      : [];
+    if (routineId && (!routine || routineExercises.length === 0)) {
+      this._showToast(t('session.routine_empty'), 'error');
+      return;
+    }
+
     // Build session
     this._session = {
       id: uid(),
       routineId: routineId || null,
       name: routine ? routine.name : t('session.free_name'),
       startTime: Date.now(),
-      exercises: routine
-        ? routine.exercises.map(ex => ({
-            exerciseId: ex.exerciseId,
-            sets: (ex.sets || []).map(s => ({
-              type:      s.type   || 'normal',
-              weight:    s.weight || 0,
-              reps:      s.reps   || 0,
-              completed: false,
-              isPR:      false,
-            })),
-            note: ex.note || '',
-          }))
-        : [],
+      exercises: routineExercises.map(ex => ({
+        exerciseId: ex.exerciseId,
+        sets: (ex.sets || []).map(s => ({
+          type:      s.type   || 'normal',
+          weight:    s.weight || 0,
+          reps:      s.reps   || 0,
+          completed: false,
+          isPR:      false,
+        })),
+        note: ex.note || '',
+      })),
     };
+    this._finishing = false;
 
     // Precompute PR history
     this._computePRHistory(sessions);
 
-    // Rest duration from profile settings (default 90 s)
-    this._restDuration = profile?.settings?.restDuration ?? 90;
+    // Profile settings (rest duration, lockCompletedSets, soundEffects, …)
+    this._applyProfileSettings(profile);
 
     // Precompute previous sets (using setting or default same_routine)
     const prevMode = profile?.settings?.previousSets || 'same_routine';
@@ -136,8 +173,11 @@ export default class SessionOverlay {
     // Update global state
     setState('activeSession', this._session);
 
+    // Persist draft immediately (crash/refresh recovery)
+    this._saveDraft();
+
     // Start timer
-    this._elapsed = 0;
+    this._syncElapsed();
     this._startTimer();
 
     // Show overlay
@@ -145,24 +185,135 @@ export default class SessionOverlay {
     this._show();
   }
 
+  /**
+   * Reprend une séance interrompue depuis le brouillon localStorage.
+   * Appelé au démarrage de l'app (app.js). La séance reprend automatiquement
+   * en mode minimisé (barre de session visible) : non-intrusif, l'utilisateur
+   * agrandit d'un tap ou peut annuler normalement.
+   *
+   * @returns {Promise<boolean>} true si une séance a été reprise
+   */
+  async resumeDraft() {
+    if (this._session) return false;
+
+    let draft = null;
+    try {
+      draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+    } catch {
+      draft = null;
+    }
+    if (!draft || !draft.id || !draft.startTime || !Array.isArray(draft.exercises)) {
+      this._clearDraft();
+      return false;
+    }
+
+    const [exercises, sessions, profile] = await Promise.all([
+      dbGetAllExercises(),
+      dbGetAllSessions(),
+      dbGetProfile(),
+    ]);
+
+    this._exercises = exercises.filter(ex => !ex.isArchived);
+    this._session   = draft;
+    this._finishing = false;
+
+    this._computePRHistory(sessions);
+    // Réintègre les PR déjà validés dans le brouillon
+    for (const ex of this._session.exercises) {
+      this._recomputeExercisePR(ex.exerciseId);
+    }
+
+    this._applyProfileSettings(profile);
+    const prevMode = profile?.settings?.previousSets || 'same_routine';
+    this._computePrevSets(sessions, draft.routineId, prevMode);
+
+    setState('activeSession', this._session);
+
+    // Le chrono se recalcule depuis startTime (rien à persister)
+    this._syncElapsed();
+    this._startTimer();
+
+    this._render();
+    this._minimize();
+    this._showToast(t('session.resumed'), 'success');
+    return true;
+  }
+
+  /** Applique les réglages du profil sur l'état interne. */
+  _applyProfileSettings(profile) {
+    this._settings = profile?.settings ?? {};
+    // Durée de repos par défaut : settings.restTimer.defaultSeconds (cf. db.js)
+    this._restDuration = profile?.settings?.restTimer?.defaultSeconds ?? 90;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Draft persistence (localStorage) — reprise après refresh/crash
+  // ---------------------------------------------------------------------------
+
+  /** Sauvegarde immédiate du brouillon (mutations importantes : toggle, splice…). */
+  _saveDraft() {
+    if (!this._session) return;
+    clearTimeout(this._draftTimeout);
+    this._draftTimeout = null;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(this._session));
+    } catch { /* quota / private mode — non bloquant */ }
+  }
+
+  /** Sauvegarde débouncée (~300 ms) pour les saisies clavier (kg/reps/note). */
+  _saveDraftDebounced() {
+    clearTimeout(this._draftTimeout);
+    this._draftTimeout = setTimeout(() => this._saveDraft(), 300);
+  }
+
+  /** Supprime le brouillon (fin ou annulation de séance). */
+  _clearDraft() {
+    clearTimeout(this._draftTimeout);
+    this._draftTimeout = null;
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch { /* non bloquant */ }
+  }
+
   // ---------------------------------------------------------------------------
   // PR & previous sets computation
   // ---------------------------------------------------------------------------
 
   _computePRHistory(sessions) {
-    this._prHistory = {};
+    this._basePRHistory = {};
     for (const sess of sessions) {
       for (const ex of (sess.exercises || [])) {
         for (const set of (ex.sets || [])) {
           if (set.completed && set.weight > 0 && set.reps > 0) {
-            const e1rm = set.weight * (1 + set.reps / 30);
-            if (!this._prHistory[ex.exerciseId] || e1rm > this._prHistory[ex.exerciseId]) {
-              this._prHistory[ex.exerciseId] = e1rm;
+            const e1rm = estimate1RM(set.weight, set.reps);
+            if (!this._basePRHistory[ex.exerciseId] || e1rm > this._basePRHistory[ex.exerciseId]) {
+              this._basePRHistory[ex.exerciseId] = e1rm;
             }
           }
         }
       }
     }
+    this._prHistory = { ...this._basePRHistory };
+  }
+
+  /**
+   * Recalcule le meilleur 1RM d'un exercice : historique (base) + séries
+   * cochées de la séance en cours. Utilisé au décochage/suppression d'une
+   * série pour que le PR redevienne détectable au re-cochage.
+   */
+  _recomputeExercisePR(exerciseId) {
+    let best = this._basePRHistory[exerciseId] || 0;
+    for (const ex of (this._session?.exercises || [])) {
+      if (ex.exerciseId !== exerciseId) continue;
+      for (const set of ex.sets) {
+        if (set.completed && set.type !== 'timer') {
+          const e1rm = estimate1RM(set.weight, set.reps);
+          if (e1rm > best) best = e1rm;
+        }
+      }
+    }
+    if (best > 0) this._prHistory[exerciseId] = best;
+    else delete this._prHistory[exerciseId];
   }
 
   _computePrevSets(sessions, routineId, mode) {
@@ -177,20 +328,43 @@ export default class SessionOverlay {
       for (const sess of candidates) {
         const found = (sess.exercises || []).find(e => e.exerciseId === ex.exerciseId);
         if (found) {
-          this._prevSets[ex.exerciseId] = found.sets || [];
+          // Ne garder que les séries non-timer COMPLÉTÉES : la colonne
+          // « précédent » s'aligne alors correctement sur les lignes du jour.
+          this._prevSets[ex.exerciseId] = (found.sets || [])
+            .filter(s => s.completed && s.type !== 'timer');
           break;
         }
       }
     }
   }
 
+  /**
+   * Série « précédente » alignée sur la position non-timer de la série si :
+   * les lignes timer de la séance courante ne décalent plus l'index.
+   */
+  _prevSetFor(ex, si) {
+    const prev = this._prevSets[ex.exerciseId] || [];
+    let idx = 0;
+    for (let i = 0; i < si; i++) {
+      if (ex.sets[i]?.type !== 'timer') idx++;
+    }
+    return prev[idx];
+  }
+
   // ---------------------------------------------------------------------------
   // Timer
   // ---------------------------------------------------------------------------
 
+  /** Recalcule _elapsed depuis startTime (fiable après throttling/suspension). */
+  _syncElapsed() {
+    if (!this._session) return;
+    this._elapsed = Math.max(0, Math.floor((Date.now() - this._session.startTime) / 1000));
+  }
+
   _startTimer() {
+    this._stopTimer();
     this._timerInterval = setInterval(() => {
-      this._elapsed++;
+      this._syncElapsed();
       this._updateTimerDisplay();
     }, 1000);
     setState('sessionTimer', this._timerInterval);
@@ -225,16 +399,26 @@ export default class SessionOverlay {
   // ---------------------------------------------------------------------------
 
   _show() {
+    // Annule un _hide() en cours (réduire puis ré-agrandir < 400 ms)
+    clearTimeout(this._hideTimeout);
+    this._hideTimeout = null;
     // Remove hidden, then animate in on next frame
     this._overlay.classList.remove('hidden');
     requestAnimationFrame(() => {
       requestAnimationFrame(() => this._overlay.classList.add('visible'));
     });
+    // Écran allumé pendant la séance en plein écran
+    if (this._session) this._acquireWakeLock();
   }
 
   _hide() {
     this._overlay.classList.remove('visible');
-    setTimeout(() => this._overlay.classList.add('hidden'), 400);
+    clearTimeout(this._hideTimeout);
+    this._hideTimeout = setTimeout(() => {
+      this._overlay.classList.add('hidden');
+      this._hideTimeout = null;
+    }, 400);
+    this._releaseWakeLock();
   }
 
   _minimize() {
@@ -353,8 +537,6 @@ export default class SessionOverlay {
   // ---------------------------------------------------------------------------
 
   _buildSetsTable(ex, exIdx) {
-    const prevSets = this._prevSets[ex.exerciseId] || [];
-
     const headerRow = `
       <div class="session-sets__header">
         <span class="session-sets__col-set">${t('session.col_set')}</span>
@@ -364,7 +546,7 @@ export default class SessionOverlay {
         <span class="session-sets__col-check"></span>
       </div>`;
 
-    const rows = ex.sets.map((set, si) => this._buildSetRow(set, si, exIdx, prevSets[si])).join('');
+    const rows = ex.sets.map((set, si) => this._buildSetRow(set, si, exIdx, this._prevSetFor(ex, si))).join('');
 
     return headerRow + rows;
   }
@@ -386,6 +568,9 @@ export default class SessionOverlay {
 
     const typeLabel = set.type === 'warmup' ? 'W' : set.type === 'drop' ? 'D' : set.type === 'failure' ? 'F' : String(si + 1);
     const typeClass = set.type === 'warmup' ? 'type-warmup' : set.type === 'drop' ? 'type-drop' : set.type === 'failure' ? 'type-failure' : 'type-normal';
+    // Réglage lockCompletedSets : série cochée → inputs en lecture seule
+    const locked    = !!(this._settings.lockCompletedSets && set.completed);
+    const lockAttr  = locked ? ' disabled' : '';
     const doneClass = set.completed ? ' session-set-row--done' : '';
     const checkIcon = set.completed ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle-check';
     const checkClass = set.completed ? ' session-set-row__check--checked' : '';
@@ -401,7 +586,7 @@ export default class SessionOverlay {
           <i class="fa-solid fa-trash"></i>
         </button>
         <div class="session-set-row${doneClass}" data-ex-idx="${exIdx}" data-si="${si}">
-          <button class="session-set-row__type ${typeClass}" data-action="show-type-picker" data-ex-idx="${exIdx}" data-si="${si}">
+          <button class="session-set-row__type ${typeClass}" data-action="show-type-picker" data-ex-idx="${exIdx}" data-si="${si}"${lockAttr}>
             ${typeLabel}
           </button>
           <span class="session-set-row__prev">${prevText}</span>
@@ -410,14 +595,14 @@ export default class SessionOverlay {
             type="number" min="0" step="0.5" inputmode="decimal"
             value="${set.weight > 0 ? set.weight : ''}"
             placeholder="—"
-            data-field="weight" data-ex-idx="${exIdx}" data-si="${si}"
+            data-field="weight" data-ex-idx="${exIdx}" data-si="${si}"${lockAttr}
           >
           <input
             class="session-set-row__input"
             type="number" min="0" step="1" inputmode="numeric"
             value="${set.reps > 0 ? set.reps : ''}"
             placeholder="—"
-            data-field="reps" data-ex-idx="${exIdx}" data-si="${si}"
+            data-field="reps" data-ex-idx="${exIdx}" data-si="${si}"${lockAttr}
           >
           <button class="session-set-row__check${checkClass}" data-action="toggle-set" data-ex-idx="${exIdx}" data-si="${si}">
             ${prBadge}<i class="${checkIcon}"></i>
@@ -448,7 +633,7 @@ export default class SessionOverlay {
     const ex = this._session.exercises[exIdx];
     setsEl.innerHTML = this._buildSetsTable(ex, exIdx);
     // Si le timer de repos est actif sur cet exercice, le réinsérer
-    if (this._restInterval && this._restExIdx === exIdx) {
+    if (this._restInterval && this._restEx === ex) {
       this._insertRestTimerBar();
     }
   }
@@ -462,18 +647,22 @@ export default class SessionOverlay {
     const exIdx = parseInt(e.target.dataset.exIdx);
     const si    = parseInt(e.target.dataset.si);
 
-    // Weight / reps inputs
+    // Weight / reps inputs (clampés à 0 : pas de valeurs négatives)
     if (field && !isNaN(exIdx) && !isNaN(si)) {
-      const val = parseFloat(e.target.value) || 0;
+      const val = Math.max(0, parseFloat(e.target.value) || 0);
       if (field === 'weight') this._session.exercises[exIdx].sets[si].weight = val;
       if (field === 'reps')   this._session.exercises[exIdx].sets[si].reps   = val;
+      this._saveDraftDebounced();
       return;
     }
 
     // Note textarea
     if (e.target.dataset.action === 'note-input') {
       const idx = parseInt(e.target.dataset.exIdx);
-      if (!isNaN(idx)) this._session.exercises[idx].note = e.target.value;
+      if (!isNaN(idx)) {
+        this._session.exercises[idx].note = e.target.value;
+        this._saveDraftDebounced();
+      }
     }
   }
 
@@ -490,7 +679,12 @@ export default class SessionOverlay {
         break;
 
       case 'reset-timer':
-        this._elapsed = 0;
+        // Le chrono est calculé depuis startTime : reset = nouveau startTime
+        if (this._session) {
+          this._session.startTime = Date.now();
+          this._saveDraft();
+        }
+        this._syncElapsed();
         this._updateTimerDisplay();
         break;
 
@@ -519,6 +713,7 @@ export default class SessionOverlay {
         if (!isNaN(exIdx) && !isNaN(si) && newType) {
           this._session.exercises[exIdx].sets[si].type = newType;
           document.querySelector('.session-type-popup')?.remove();
+          this._saveDraft();
           this._reRenderSetsSection(exIdx);
         }
         break;
@@ -530,6 +725,7 @@ export default class SessionOverlay {
           if (sets[si + 1]?.type !== 'timer') {
             sets.splice(si + 1, 0, { type: 'timer', duration: this._restDuration, completed: false, weight: 0, reps: 0, isPR: false });
             document.querySelector('.session-type-popup')?.remove();
+            this._saveDraft();
             this._reRenderSetsSection(exIdx);
           }
         }
@@ -550,15 +746,16 @@ export default class SessionOverlay {
         // Timer rows : suppression directe sans confirmation
         if (!isNaN(exIdx) && !isNaN(si)) {
           this._session.exercises[exIdx].sets.splice(si, 1);
+          this._saveDraft();
           this._reRenderSetsSection(exIdx);
         }
         break;
       }
 
       case 'delete-set': {
-        // Séries normales : affiche la popup de confirmation
+        // Séries normales : confirmation selon le réglage confirmDeleteSet
         if (!isNaN(exIdx) && !isNaN(si)) {
-          this._showDeleteConfirmation(exIdx, si);
+          this._requestDeleteSet(exIdx, si);
         }
         break;
       }
@@ -571,8 +768,7 @@ export default class SessionOverlay {
       case 'confirm-delete': {
         document.getElementById('session-delete-confirm')?.remove();
         if (!isNaN(exIdx) && !isNaN(si)) {
-          this._session.exercises[exIdx].sets.splice(si, 1);
-          this._reRenderSetsSection(exIdx);
+          this._deleteSet(exIdx, si);
         }
         break;
       }
@@ -588,6 +784,7 @@ export default class SessionOverlay {
             completed: false,
             isPR:      false,
           });
+          this._saveDraft();
           this._reRenderSetsSection(exIdx);
         }
         break;
@@ -603,8 +800,12 @@ export default class SessionOverlay {
         break;
 
       case 'rest-add-time': {
-        this._restRemaining += 60;
-        this._restTotal = Math.max(this._restTotal, this._restRemaining);
+        clearTimeout(this._restDoneTimeout);
+        this._restDoneTimeout = null;
+        // Base timestamp : fin en cours si le timer tourne, sinon maintenant
+        this._restEndsAt    = (this._restInterval ? this._restEndsAt : Date.now()) + 60000;
+        this._restRemaining = Math.max(0, Math.ceil((this._restEndsAt - Date.now()) / 1000));
+        this._restTotal     = Math.max(this._restTotal, this._restRemaining);
         if (!this._restInterval) {
           const el = document.getElementById('session-rest-timer');
           if (el) el.classList.remove('session-rest-bar--done');
@@ -622,7 +823,13 @@ export default class SessionOverlay {
       case 'timer-adjust': {
         const delta = parseInt(target.dataset.delta, 10);
         if (!isNaN(delta)) {
-          this._globalRemaining = Math.max(1, this._globalRemaining + delta);
+          clearTimeout(this._globalDoneTimeout);
+          this._globalDoneTimeout = null;
+          const base = this._globalInterval
+            ? this._globalEndsAt
+            : Date.now() + this._globalRemaining * 1000;
+          this._globalEndsAt    = Math.max(Date.now() + 1000, base + delta * 1000);
+          this._globalRemaining = Math.max(1, Math.ceil((this._globalEndsAt - Date.now()) / 1000));
           this._globalTotal     = Math.max(this._globalTotal, this._globalRemaining);
           if (!this._globalInterval) {
             document.getElementById('session-timer-modal')?.classList.remove('timer-modal--done');
@@ -743,15 +950,40 @@ export default class SessionOverlay {
       document.removeEventListener('pointerdown', closePopup, true);
       if (action === 'select-type' && !isNaN(eIdx) && !isNaN(sIdx)) {
         this._session.exercises[eIdx].sets[sIdx].type = btn.dataset.type;
+        this._saveDraft();
         this._reRenderSetsSection(eIdx);
       } else if (action === 'add-timer-row' && !isNaN(eIdx) && !isNaN(sIdx)) {
         const sets = this._session.exercises[eIdx].sets;
         if (sets[sIdx + 1]?.type !== 'timer') {
           sets.splice(sIdx + 1, 0, { type: 'timer', duration: this._restDuration, completed: false, weight: 0, reps: 0, isPR: false });
+          this._saveDraft();
           this._reRenderSetsSection(eIdx);
         }
       }
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Set deletion (réglage confirmDeleteSet)
+  // ---------------------------------------------------------------------------
+
+  /** Supprime avec ou sans confirmation selon le réglage confirmDeleteSet. */
+  _requestDeleteSet(exIdx, si) {
+    if (this._settings.confirmDeleteSet === false) {
+      this._deleteSet(exIdx, si);
+    } else {
+      this._showDeleteConfirmation(exIdx, si);
+    }
+  }
+
+  _deleteSet(exIdx, si) {
+    const sets = this._session?.exercises[exIdx]?.sets;
+    if (!sets || !sets[si]) return;
+    const [removed] = sets.splice(si, 1);
+    // Si une série PR est supprimée, le meilleur 1RM doit être recalculé
+    if (removed?.isPR) this._recomputeExercisePR(this._session.exercises[exIdx].exerciseId);
+    this._saveDraft();
+    this._reRenderSetsSection(exIdx);
   }
 
   // ---------------------------------------------------------------------------
@@ -763,12 +995,15 @@ export default class SessionOverlay {
     const set = ex.sets[si];
     set.completed = !set.completed;
 
-    // Haptic feedback on completion
-    if (set.completed) navigator.vibrate?.(40);
+    // Haptic + sound feedback on completion
+    if (set.completed) {
+      navigator.vibrate?.(40);
+      this._playBeep(1);
+    }
 
     if (set.completed && set.weight > 0 && set.reps > 0) {
       // Check for PR
-      const e1rm = set.weight * (1 + set.reps / 30);
+      const e1rm = estimate1RM(set.weight, set.reps);
       const prev = this._prHistory[ex.exerciseId] || 0;
       if (e1rm > prev) {
         set.isPR = true;
@@ -777,7 +1012,10 @@ export default class SessionOverlay {
         this._showToast(`${t('session.new_pr')}${exercise ? ' — ' + exercise.name : ''}`, 'success');
       }
     } else {
+      // Décochage : rollback du meilleur 1RM pour que le PR soit
+      // à nouveau détectable si la série est re-cochée.
       set.isPR = false;
+      this._recomputeExercisePR(ex.exerciseId);
     }
 
     if (set.completed) {
@@ -791,13 +1029,16 @@ export default class SessionOverlay {
       this._stopRestTimer();
     }
 
+    // Mutation importante : flush immédiat du brouillon
+    this._saveDraft();
+
     // Targeted DOM update — replace the whole .set-row-wrap (or .session-set-row for timer rows)
     const toggleBtn = this._overlay.querySelector(
       `[data-action="toggle-set"][data-ex-idx="${exIdx}"][data-si="${si}"]`
     );
     const rowEl = toggleBtn?.closest('.set-row-wrap') ?? toggleBtn?.closest('.session-set-row');
     if (rowEl) {
-      const newHtml = this._buildSetRow(set, si, exIdx, (this._prevSets[ex.exerciseId] || [])[si]);
+      const newHtml = this._buildSetRow(set, si, exIdx, this._prevSetFor(ex, si));
       const temp = document.createElement('div');
       temp.innerHTML = newHtml;
       rowEl.replaceWith(temp.firstElementChild);
@@ -832,7 +1073,11 @@ export default class SessionOverlay {
       const target = e.target.closest('[data-action]');
       if (!target) return;
       if (target.dataset.action === 'remove-ex') {
-        this._session.exercises.splice(parseInt(target.dataset.exIdx), 1);
+        const [removed] = this._session.exercises.splice(parseInt(target.dataset.exIdx), 1);
+        // Si le repos en cours appartenait à cet exercice, l'arrêter
+        if (removed && this._restEx === removed) this._stopRestTimerImmediate();
+        if (removed) this._recomputeExercisePR(removed.exerciseId);
+        this._saveDraft();
         this._closeModal();
         // Re-render entire overlay content to reflect removal
         this._render();
@@ -923,6 +1168,7 @@ export default class SessionOverlay {
           sets: [{ type: 'normal', weight: 0, reps: 0, completed: false, isPR: false }],
           note: '',
         });
+        this._saveDraft();
         this._closeModal();
         this._render(); // Full re-render to include new exercise
       }
@@ -971,10 +1217,15 @@ export default class SessionOverlay {
   _cancelSession() {
     this._stopTimer();
     this._stopRestTimerImmediate();
+    this._stopGlobalTimer();
+    this._clearDraft();
+    this._releaseWakeLock();
     setState('activeSession', null);
     this._session   = null;
+    this._finishing = false;
     this._prevSets  = {};
     this._prHistory = {};
+    this._basePRHistory = {};
     this._bar.classList.add('hidden');
     this._hide();
   }
@@ -984,8 +1235,33 @@ export default class SessionOverlay {
   // ---------------------------------------------------------------------------
 
   async _finishSession() {
+    // Garde de réentrance : évite le double-comptage (usageCount,
+    // totalWorkouts) sur double-clic pendant les await.
+    if (this._finishing || !this._session) return;
+    this._finishing = true;
+
     this._stopTimer();
     this._stopRestTimerImmediate();
+    this._stopGlobalTimer();
+
+    // Réglage manageIncompleteSets : ask / keep / delete (cf. profil.js)
+    const incompleteMode = this._settings.manageIncompleteSets || 'ask';
+    const hasIncomplete  = this._session.exercises.some(ex => ex.sets.some(s => !s.completed));
+    let discardIncomplete = false;
+    if (hasIncomplete) {
+      if (incompleteMode === 'delete') {
+        discardIncomplete = true;
+      } else if (incompleteMode === 'ask') {
+        // confirm natif : OK = conserver, Annuler = retirer
+        discardIncomplete = !window.confirm(t('session.incomplete_sets_prompt'));
+      }
+      // 'keep' → comportement actuel (on garde tout)
+    }
+    if (discardIncomplete) {
+      for (const ex of this._session.exercises) {
+        ex.sets = ex.sets.filter(s => s.completed);
+      }
+    }
 
     const endTime  = Date.now();
     const duration = Math.floor((endTime - this._session.startTime) / 1000);
@@ -1002,13 +1278,13 @@ export default class SessionOverlay {
         if (set.completed) {
           if (set.weight > 0 && set.reps > 0) {
             totalVolume += set.weight * set.reps;
-            const e1rm = set.weight * (1 + set.reps / 30);
+            const e1rm = estimate1RM(set.weight, set.reps);
             if (e1rm > best1RM) {
               best1RM = e1rm;
               bestSet = {
                 weight:       set.weight,
                 reps:         set.reps,
-                estimated1RM: Math.round(e1rm * 2) / 2,
+                estimated1RM: e1rm,
               };
             }
           }
@@ -1025,8 +1301,9 @@ export default class SessionOverlay {
         bestSet,
       });
 
-      // Increment usageCount
-      if (exercise) {
+      // Increment usageCount — uniquement si au moins une vraie série complétée
+      const hasCompletedSet = ex.sets.some(s => s.completed && s.type !== 'timer');
+      if (exercise && hasCompletedSet) {
         exercise.usageCount = (exercise.usageCount || 0) + 1;
         await dbPutExercise(exercise).catch(() => {});
       }
@@ -1062,6 +1339,10 @@ export default class SessionOverlay {
       profile.totalWorkouts = (profile.totalWorkouts || 0) + 1;
       await dbSaveProfile(profile).catch(() => {});
     }
+
+    // La séance est sauvegardée : le brouillon n'a plus lieu d'être
+    this._clearDraft();
+    this._releaseWakeLock();
 
     setState('activeSession', null);
     this._bar.classList.add('hidden');
@@ -1135,8 +1416,10 @@ export default class SessionOverlay {
         this._hide();
         // Clean up session state
         this._session   = null;
+        this._finishing = false;
         this._prevSets  = {};
         this._prHistory = {};
+        this._basePRHistory = {};
         this._elapsed   = 0;
         // Notify pages so they can refresh their data
         document.dispatchEvent(new CustomEvent('session-complete', { bubbles: true }));
@@ -1198,15 +1481,18 @@ export default class SessionOverlay {
       const dragDy = touch.clientY - this._reorderStartY;
       this._reorderDragging.style.transform = `translateY(${dragDy}px)`;
 
-      // Determine target index from finger position
+      // Determine target index from finger position.
+      // Basé sur les milieux capturés au début du drag (positions stables,
+      // insensibles aux translateY d'animation). Cible = nombre d'items
+      // (hors item déplacé) dont le milieu est au-dessus du doigt : si le
+      // doigt est au-dessus du milieu du premier item, la cible vaut 0.
       const containerTop = container.getBoundingClientRect().top;
       const fingerY      = touch.clientY - containerTop;
       const items        = [...container.querySelectorAll('.session-reorder__item')];
-      let   newTarget    = this._reorderStartIdx;
-      for (let i = 0; i < items.length; i++) {
-        if (items[i] === this._reorderDragging) continue;
-        const mid = items[i].getBoundingClientRect().top + items[i].offsetHeight / 2 - containerTop;
-        if (fingerY > mid) newTarget = i;
+      let   newTarget    = 0;
+      for (let i = 0; i < this._reorderMids.length; i++) {
+        if (i === this._reorderStartIdx) continue;
+        if (fingerY > this._reorderMids[i]) newTarget++;
       }
       if (newTarget !== this._reorderTargetIdx) {
         this._reorderTargetIdx = newTarget;
@@ -1260,6 +1546,7 @@ export default class SessionOverlay {
       if (from !== to) {
         const [moved] = this._session.exercises.splice(from, 1);
         this._session.exercises.splice(to, 0, moved);
+        this._saveDraft();
       }
       this._render();
       return;
@@ -1276,7 +1563,7 @@ export default class SessionOverlay {
         this._openSwipeRow = this._swipeRow;
         const eIdx = parseInt(this._swipeRow.dataset.exIdx, 10);
         const sIdx = parseInt(this._swipeRow.dataset.si, 10);
-        this._showDeleteConfirmation(eIdx, sIdx);
+        this._requestDeleteSet(eIdx, sIdx);
       } else if (dx > 20 && isOpen) {
         this._closeOpenSwipeRow();
       } else if (!isOpen) {
@@ -1384,6 +1671,12 @@ export default class SessionOverlay {
     this._reorderStartY    = this._lpStartY;
     this._reorderStartIdx  = lpExIdx;
     this._reorderTargetIdx = lpExIdx;
+    // Capture les milieux des items AVANT toute translation d'animation :
+    // positions de référence stables pour le calcul de la cible du drag.
+    const containerTop = container.getBoundingClientRect().top;
+    this._reorderMids = items.map(it =>
+      it.getBoundingClientRect().top + it.offsetHeight / 2 - containerTop
+    );
     item.classList.add('session-reorder__item--dragging');
   }
 
@@ -1396,7 +1689,11 @@ export default class SessionOverlay {
       clearInterval(this._globalInterval);
       this._globalInterval = null;
     }
+    // Annule le nettoyage différé d'un timer précédent (course de timers)
+    clearTimeout(this._globalDoneTimeout);
+    this._globalDoneTimeout = null;
     this._globalTotal     = seconds;
+    this._globalEndsAt    = Date.now() + seconds * 1000;
     this._globalRemaining = seconds;
     this._globalInterval  = setInterval(() => this._tickGlobalTimer(), 1000);
     this._updateTimerBtn();
@@ -1407,24 +1704,32 @@ export default class SessionOverlay {
       clearInterval(this._globalInterval);
       this._globalInterval = null;
     }
+    clearTimeout(this._globalDoneTimeout);
+    this._globalDoneTimeout = null;
     this._globalRemaining = 0;
     this._globalTotal     = 0;
+    this._globalEndsAt    = 0;
     document.getElementById('session-timer-modal')?.remove();
     this._updateTimerBtn();
   }
 
   _tickGlobalTimer() {
-    this._globalRemaining = Math.max(0, this._globalRemaining - 1);
+    // Restant recalculé depuis le timestamp de fin (fiable en arrière-plan)
+    this._globalRemaining = Math.max(0, Math.ceil((this._globalEndsAt - Date.now()) / 1000));
     if (this._globalRemaining <= 0) {
       clearInterval(this._globalInterval);
       this._globalInterval = null;
       this._updateGlobalTimerModal();
       this._updateTimerBtn();
       navigator.vibrate?.([200, 100, 200]);
+      this._playBeep(2);
       document.getElementById('session-timer-modal')?.classList.add('timer-modal--done');
-      setTimeout(() => {
+      clearTimeout(this._globalDoneTimeout);
+      this._globalDoneTimeout = setTimeout(() => {
+        this._globalDoneTimeout = null;
         this._globalRemaining = 0;
         this._globalTotal     = 0;
+        this._globalEndsAt    = 0;
         document.getElementById('session-timer-modal')?.remove();
         this._updateTimerBtn();
       }, 2500);
@@ -1529,12 +1834,26 @@ export default class SessionOverlay {
 
   _startRestTimer(seconds, exIdx, si = null) {
     this._stopRestTimerImmediate();
-    this._restExIdx     = exIdx ?? null;
-    this._restSi        = si;
+    // Références d'objets (pas d'index bruts) : insensibles aux splice /
+    // réordonnancements survenant pendant le repos.
+    this._restEx  = (exIdx != null && this._session) ? (this._session.exercises[exIdx] ?? null) : null;
+    this._restSet = (si !== null && this._restEx)    ? (this._restEx.sets[si] ?? null)          : null;
     this._restTotal     = seconds;
+    this._restEndsAt    = Date.now() + seconds * 1000;
     this._restRemaining = seconds;
     this._restInterval  = setInterval(() => this._tickRestTimer(), 1000);
     this._insertRestTimerBar();
+  }
+
+  /** Index courants (live) de l'exercice/set du repos. -1 si supprimés. */
+  _restIndices() {
+    const exIdx = (this._session && this._restEx)
+      ? this._session.exercises.indexOf(this._restEx)
+      : -1;
+    const si = (exIdx !== -1 && this._restSet)
+      ? this._restEx.sets.indexOf(this._restSet)
+      : -1;
+    return { exIdx, si };
   }
 
   /** Suppression immédiate (bouton Ignorer) — réaffiche la ligne timer en idle */
@@ -1543,13 +1862,16 @@ export default class SessionOverlay {
       clearInterval(this._restInterval);
       this._restInterval = null;
     }
-    const exIdx = this._restExIdx;
+    clearTimeout(this._restDoneTimeout);
+    this._restDoneTimeout = null;
+    const { exIdx } = this._restIndices();
     this._restRemaining = 0;
     this._restTotal     = 0;
-    this._restExIdx     = null;
-    this._restSi        = null;
+    this._restEndsAt    = 0;
+    this._restEx        = null;
+    this._restSet       = null;
     document.getElementById('session-rest-timer')?.remove();
-    if (exIdx !== null) this._reRenderSetsSection(exIdx);
+    if (exIdx !== -1) this._reRenderSetsSection(exIdx);
   }
 
   /** Suppression instantanée (annulation / fin de séance) */
@@ -1558,38 +1880,48 @@ export default class SessionOverlay {
       clearInterval(this._restInterval);
       this._restInterval = null;
     }
+    clearTimeout(this._restDoneTimeout);
+    this._restDoneTimeout = null;
     this._restRemaining = 0;
     this._restTotal     = 0;
-    this._restExIdx     = null;
-    this._restSi        = null;
+    this._restEndsAt    = 0;
+    this._restEx        = null;
+    this._restSet       = null;
     document.getElementById('session-rest-timer')?.remove();
   }
 
   _tickRestTimer() {
-    this._restRemaining = Math.max(0, this._restRemaining - 1);
+    // Restant recalculé depuis le timestamp de fin (fiable en arrière-plan)
+    this._restRemaining = Math.max(0, Math.ceil((this._restEndsAt - Date.now()) / 1000));
     if (this._restRemaining <= 0) {
       clearInterval(this._restInterval);
       this._restInterval = null;
       this._updateRestTimerDisplay();
       navigator.vibrate?.([200, 100, 200]);
+      this._playBeep(2);
 
-      // Mark the timer set as completed
-      const exIdx = this._restExIdx;
-      const si    = this._restSi;
-      const set   = this._session?.exercises[exIdx]?.sets[si];
-      if (set?.type === 'timer') set.completed = true;
+      // Mark the timer set as completed (référence directe, index-safe)
+      if (this._restSet?.type === 'timer') {
+        this._restSet.completed = true;
+        this._saveDraft();
+      }
 
       const el = document.getElementById('session-rest-timer');
       if (el) el.classList.add('session-rest-bar--done');
 
-      // After 2.5 s, replace bar with the done row
-      setTimeout(() => {
-        this._restExIdx     = null;
-        this._restSi        = null;
+      // After 2.5 s, replace bar with the done row — annulable si un
+      // nouveau timer démarre entre-temps (course de timers).
+      clearTimeout(this._restDoneTimeout);
+      this._restDoneTimeout = setTimeout(() => {
+        this._restDoneTimeout = null;
+        const { exIdx } = this._restIndices();
+        this._restEx        = null;
+        this._restSet       = null;
         this._restRemaining = 0;
         this._restTotal     = 0;
+        this._restEndsAt    = 0;
         document.getElementById('session-rest-timer')?.remove();
-        if (exIdx !== null) this._reRenderSetsSection(exIdx);
+        if (exIdx !== -1) this._reRenderSetsSection(exIdx);
       }, 2500);
       return;
     }
@@ -1603,9 +1935,13 @@ export default class SessionOverlay {
    */
   _insertRestTimerBar() {
     document.getElementById('session-rest-timer')?.remove();
-    const exIdx = this._restExIdx;
-    const si    = this._restSi;
-    if (exIdx === null) return;
+    if (!this._restEx) return;
+    const { exIdx, si } = this._restIndices();
+    if (exIdx === -1) {
+      // L'exercice a été supprimé pendant le repos → arrêt propre
+      this._stopRestTimerImmediate();
+      return;
+    }
 
     const fillPct = this._restTotal > 0
       ? ((this._restRemaining / this._restTotal) * 100).toFixed(1)
@@ -1623,7 +1959,7 @@ export default class SessionOverlay {
       </div>`;
 
     // Replace the idle timer row if found, otherwise append to the sets container
-    const timerRow = si !== null
+    const timerRow = si !== -1
       ? this._overlay.querySelector(`.session-set-row--timer[data-ex-idx="${exIdx}"][data-si="${si}"]`)
       : null;
     if (timerRow) {
@@ -1671,11 +2007,78 @@ export default class SessionOverlay {
   }
 
   // ---------------------------------------------------------------------------
+  // Screen Wake Lock — écran allumé pendant la séance en plein écran
+  // ---------------------------------------------------------------------------
+
+  async _acquireWakeLock() {
+    if (!('wakeLock' in navigator)) return; // API non supportée partout
+    if (this._wakeLock) return;
+    try {
+      this._wakeLock = await navigator.wakeLock.request('screen');
+      // Libéré par le navigateur (onglet en arrière-plan) → réinitialise le
+      // sentinel ; la ré-acquisition se fait sur visibilitychange.
+      this._wakeLock.addEventListener('release', () => {
+        this._wakeLock = null;
+      });
+    } catch {
+      this._wakeLock = null;
+    }
+  }
+
+  _releaseWakeLock() {
+    try {
+      this._wakeLock?.release();
+    } catch { /* déjà libéré */ }
+    this._wakeLock = null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sound effects — bip discret (WebAudio, oscillateur court, aucun fichier)
+  // ---------------------------------------------------------------------------
+
+  _playBeep(times = 1) {
+    if (!this._settings.soundEffects) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!this._audioCtx) this._audioCtx = new Ctx();
+      const ctx = this._audioCtx;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      for (let i = 0; i < times; i++) {
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const t0   = ctx.currentTime + i * 0.18;
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(0.08, t0 + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + 0.15);
+      }
+    } catch { /* audio indisponible — non bloquant */ }
+  }
+
+  // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 
   _getExercise(id) {
     return this._exercises.find(ex => ex.id === id);
+  }
+
+  /** Nettoyage complet (listeners globaux, timers, wake lock). */
+  destroy() {
+    this._stopTimer();
+    this._stopRestTimerImmediate();
+    this._stopGlobalTimer();
+    clearTimeout(this._hideTimeout);
+    this._hideTimeout = null;
+    clearTimeout(this._draftTimeout);
+    this._draftTimeout = null;
+    this._releaseWakeLock();
+    document.removeEventListener('visibilitychange', this._onVisibilityChange);
   }
 
   _closeModal() {

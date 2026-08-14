@@ -83,6 +83,17 @@ async function init() {
     await sessionOverlay.start(e.detail?.routineId ?? null);
   });
 
+  // 6b. Reprise d'une séance interrompue (brouillon localStorage
+  // 'gm-active-session'). Choix : reprise automatique en mode minimisé
+  // (barre de session visible, chrono recalculé depuis startTime) — moins
+  // intrusif qu'un confirm() bloquant au démarrage ; l'utilisateur peut
+  // toujours annuler la séance depuis l'overlay.
+  try {
+    await sessionOverlay.resumeDraft();
+  } catch (err) {
+    console.warn('[App] Reprise de séance impossible :', err);
+  }
+
   // 8. iOS: show install banner after a short delay (no beforeinstallprompt on Safari)
   if (_isIOS && !_isStandalone) {
     setTimeout(_showInstallBanner, 3000);

@@ -120,6 +120,9 @@ export default {
   'session.free_name':         'Entraînement libre',
   'session.remove_exercise':   'Retirer l\'exercice',
   'session.no_sets':           'Aucune série complétée',
+  'session.resumed':           'Séance en cours reprise',
+  'session.incomplete_sets_prompt': 'Des séries ne sont pas complétées. Les conserver ?',
+  'session.routine_empty':     'Cette routine ne contient aucun exercice valide',
 
   /* ── Page Exercices ── */
   'exercises.title':           'Exercices',
