@@ -912,3 +912,81 @@
     max-width: 200px;
   }
 }
+
+
+/* ============================================================
+   10. IMPORT STRONG — modale de correspondance des exercices
+   ============================================================ */
+
+/* Sous-titre : « {n} séances, {m} exercices à faire correspondre » */
+.strong-map__sub {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-3);
+}
+
+/* Liste scrollable des correspondances */
+.strong-map__list {
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+}
+
+/* Une ligne : nom + badge à gauche, select à droite.
+   flex-wrap : sur mobile étroit (375px), le select passe proprement
+   sur sa propre ligne pleine largeur. */
+.strong-map__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.strong-map__info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.strong-map__name {
+  font-size: var(--text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* Badge discret « ×N séances » */
+.strong-map__count {
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-2);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Le select s'étire et bascule seul en pleine largeur quand la place manque */
+.strong-map__row .strong-map__select {
+  flex: 1 1 200px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Pied de modale : Annuler / Importer */
+.strong-map__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}

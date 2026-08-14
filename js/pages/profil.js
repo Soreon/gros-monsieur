@@ -27,6 +27,7 @@ import {
 } from '../db.js';
 import { setTheme } from '../app.js';
 import { exportData, importData } from '../utils/export.js';
+import { pickCsvFile, parseStrongCsv, suggestMatches, runImport } from '../utils/strong-import.js';
 import { openModal, closeModal } from '../components/modal.js';
 
 // =============================================================================
@@ -158,6 +159,9 @@ export default class ProfilPage {
     // Settings sub-view
     this._settingsEditingProfile = false;
 
+    // Garde de réentrance de l'import Strong (double-clic sur Importer)
+    this._strongImporting = false;
+
     // Container-level delegated listeners, bound once per instance
     // (in _bindEvents) and removed in destroy()
     this._handlers = {};
@@ -194,8 +198,9 @@ export default class ProfilPage {
     }
     this._handlers = {};
 
-    // Clean up the widget picker if it's still open
-    if (document.getElementById('picker-modal-title')) {
+    // Clean up the widget picker / strong mapping modal if still open
+    if (document.getElementById('picker-modal-title') ||
+        document.getElementById('strong-map-title')) {
       closeModal();
     }
   }
@@ -848,6 +853,14 @@ export default class ProfilPage {
             </button>
             <p class="settings-row__sub">${t('settings.import_warning')}</p>
           </div>
+
+          <div class="settings-row">
+            <button class="btn btn--ghost" data-action="import-strong">
+              <i class="fa-solid fa-file-import"></i>
+              ${t('settings.strong_import')}
+            </button>
+            <p class="settings-row__sub">${t('settings.strong_import_hint')}</p>
+          </div>
         </section>
 
       </div>`;
@@ -1015,6 +1028,166 @@ export default class ProfilPage {
         alert(`Erreur lors de l'import : ${err.message}`);
       });
       return;
+    }
+
+    // Import Strong (CSV)
+    if (e.target.closest('[data-action="import-strong"]')) {
+      this._importStrong();
+      return;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Import Strong (CSV)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Flux d'import Strong : sélection du fichier CSV → parsing → modale de
+   * correspondance des exercices → import atomique → résumé + re-render.
+   */
+  async _importStrong() {
+    let parsed;
+    try {
+      const text = await pickCsvFile();
+      if (text === null) return; // sélection annulée
+      parsed = parseStrongCsv(text);
+    } catch (err) {
+      console.error('[profil] Import Strong :', err);
+      alert(err.message);
+      return;
+    }
+
+    if (parsed.workouts.length === 0) {
+      alert(t('strong.done', { imported: 0, created: 0, skipped: 0 }));
+      return;
+    }
+
+    // Données fraîches pour les suggestions, la déduplication et les PRs
+    const [exercises, sessions] = await Promise.all([
+      dbGetAllExercises(),
+      dbGetAllSessions(),
+    ]);
+
+    const suggestions = suggestMatches(parsed.exerciseNames, exercises);
+    this._openStrongMappingModal(parsed, exercises, sessions, suggestions);
+  }
+
+  /**
+   * Modale de correspondance : une ligne par exercice importé (nom + badge
+   * « ×N séances ») avec un select (créer l'exercice / exercice existant,
+   * suggestion présélectionnée).
+   * @param {{workouts: object[], exerciseNames: {name: string, workoutCount: number}[]}} parsed
+   * @param {object[]} exercises   - Exercices existants (seed + personnalisés)
+   * @param {object[]} sessions    - Sessions existantes
+   * @param {Map<string, string|null>} suggestions - nom importé → id suggéré
+   */
+  _openStrongMappingModal(parsed, exercises, sessions, suggestions) {
+    const sorted = exercises
+      .filter(ex => ex && ex.id && ex.name)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const rowsHtml = parsed.exerciseNames.map((entry, index) => {
+      const suggestion  = suggestions.get(entry.name) ?? null;
+      const optionsHtml = sorted.map(ex => `
+              <option value="${escapeHtml(ex.id)}" ${ex.id === suggestion ? 'selected' : ''}>${escapeHtml(ex.name)}</option>`).join('');
+
+      return `
+        <div class="strong-map__row" data-strong-index="${index}">
+          <div class="strong-map__info">
+            <span class="strong-map__name">${escapeHtml(entry.name)}</span>
+            <span class="strong-map__count">${escapeHtml(t('strong.sessions_count', { n: entry.workoutCount }))}</span>
+          </div>
+          <select class="settings-select strong-map__select" aria-label="${escapeHtml(entry.name)}">
+            <option value="create" ${suggestion ? '' : 'selected'}>${t('strong.create_exercise')}</option>
+            ${optionsHtml}
+          </select>
+        </div>`;
+    }).join('');
+
+    const { el } = openModal(`
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="strong-map-title">
+        <div class="modal__header">
+          <h2 class="modal__title" id="strong-map-title">${t('strong.map_title')}</h2>
+          <button class="icon-btn" data-action="strong-cancel" aria-label="${t('action.close')}">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <p class="strong-map__sub">${t('strong.map_sub', { n: parsed.workouts.length, m: parsed.exerciseNames.length })}</p>
+        <div class="strong-map__list">
+          ${rowsHtml}
+        </div>
+        <div class="strong-map__footer">
+          <button class="btn btn--ghost" data-action="strong-cancel">${t('action.cancel')}</button>
+          <button class="btn btn--primary" data-action="strong-confirm">
+            ${t('strong.import_btn', { n: parsed.workouts.length })}
+          </button>
+        </div>
+      </div>`, {
+      dismissible: false,
+      onClick: (e) => {
+        if (e.target.closest('[data-action="strong-cancel"]')) {
+          if (!this._strongImporting) closeModal();
+          return;
+        }
+        if (e.target.closest('[data-action="strong-confirm"]')) {
+          this._confirmStrongImport(el, parsed, exercises, sessions);
+        }
+      },
+    });
+  }
+
+  /**
+   * Confirme l'import : construit la Map de mapping depuis les selects,
+   * lance runImport (bouton désactivé + état de chargement pendant l'import),
+   * puis affiche le résumé et rafraîchit la page.
+   * @param {HTMLElement} el - Élément retourné par openModal
+   */
+  async _confirmStrongImport(el, parsed, exercises, sessions) {
+    if (this._strongImporting) return;
+    this._strongImporting = true;
+
+    // Correspondances choisies dans les selects (nom importé → id | 'create')
+    const mapping = new Map();
+    el.querySelectorAll('.strong-map__row').forEach(row => {
+      const entry  = parsed.exerciseNames[Number(row.dataset.strongIndex)];
+      const select = row.querySelector('.strong-map__select');
+      if (entry && select) mapping.set(entry.name, select.value);
+    });
+
+    const confirmBtn = el.querySelector('[data-action="strong-confirm"]');
+    const cancelBtns = el.querySelectorAll('[data-action="strong-cancel"]');
+    if (confirmBtn) {
+      confirmBtn.disabled    = true;
+      confirmBtn.textContent = t('state.loading');
+    }
+    cancelBtns.forEach(btn => { btn.disabled = true; });
+
+    try {
+      const result = await runImport({
+        workouts:          parsed.workouts,
+        mapping,
+        existingSessions:  sessions,
+        existingExercises: exercises,
+      });
+
+      this._strongImporting = false;
+      closeModal();
+      alert(t('strong.done', {
+        imported: result.imported,
+        created:  result.createdExercises,
+        skipped:  result.skipped,
+      }));
+      this.render();
+    } catch (err) {
+      console.error('[profil] Import Strong :', err);
+      this._strongImporting = false;
+      // Transaction atomique : rien n'a été écrit — la modale redevient utilisable
+      if (confirmBtn) {
+        confirmBtn.disabled    = false;
+        confirmBtn.textContent = t('strong.import_btn', { n: parsed.workouts.length });
+      }
+      cancelBtns.forEach(btn => { btn.disabled = false; });
+      alert(`Erreur lors de l'import : ${err.message}`);
     }
   }
 

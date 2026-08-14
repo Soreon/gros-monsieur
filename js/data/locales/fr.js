@@ -252,4 +252,15 @@ export default {
   'settings.export_data':        'Exporter mes données (JSON)',
   'settings.import_data':        'Importer des données (JSON)',
   'settings.import_warning':     'L\'importation remplacera toutes vos données actuelles.',
+  'settings.strong_import':      'Importer depuis Strong (CSV)',
+  'settings.strong_import_hint': 'Séances exportées depuis l\'app Strong',
+
+  // ── Import Strong ───────────────────────────────────────────
+  'strong.map_title':       'Correspondance des exercices',
+  'strong.map_sub':         '{n} séances, {m} exercices à faire correspondre',
+  'strong.sessions_count':  '×{n} séances',
+  'strong.create_exercise': '➕ Créer l\'exercice',
+  'strong.import_btn':      'Importer {n} séances',
+  'strong.done':            '{imported} séances importées, {created} exercices créés, {skipped} doublons ignorés',
+  'strong.invalid':         'Fichier CSV Strong non reconnu',
 };

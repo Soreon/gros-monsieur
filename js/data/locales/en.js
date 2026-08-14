@@ -252,4 +252,15 @@ export default {
   'settings.export_data':        'Export my data (JSON)',
   'settings.import_data':        'Import data (JSON)',
   'settings.import_warning':     'Importing will replace all your current data.',
+  'settings.strong_import':      'Import from Strong (CSV)',
+  'settings.strong_import_hint': 'Workouts exported from the Strong app',
+
+  // ── Strong import ───────────────────────────────────────────
+  'strong.map_title':       'Match exercises',
+  'strong.map_sub':         '{n} workouts, {m} exercises to match',
+  'strong.sessions_count':  '×{n} workouts',
+  'strong.create_exercise': '➕ Create exercise',
+  'strong.import_btn':      'Import {n} workouts',
+  'strong.done':            '{imported} workouts imported, {created} exercises created, {skipped} duplicates skipped',
+  'strong.invalid':         'Unrecognized Strong CSV file',
 };
