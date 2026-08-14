@@ -1,5 +1,13 @@
 import { t } from '../i18n.js';
-import { uid, formatDuration, formatDateShort, estimate1RM } from '../utils/helpers.js';
+import {
+  uid,
+  formatDuration,
+  formatDateShort,
+  estimate1RM,
+  escapeHtml,
+  colorForId,
+  normalize,
+} from '../utils/helpers.js';
 import {
   dbGetAllExercises,
   dbGetAllSessions,
@@ -12,20 +20,8 @@ import {
 } from '../db.js';
 import { setState, getState } from '../store.js';
 
-const ICON_COLORS = ['#7c5cbf','#4caf7d','#e55353','#f0a030','#3b9dd4','#e0609a','#5bae8f','#d4873b'];
-
 // Clé localStorage du brouillon de séance active (persistance anti-crash/refresh)
 const DRAFT_KEY = 'gm-active-session';
-
-function colorForId(id) {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  return ICON_COLORS[hash % ICON_COLORS.length];
-}
-
-function escapeHtml(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 export default class SessionOverlay {
   constructor() {
@@ -1098,9 +1094,9 @@ export default class SessionOverlay {
     const renderPicker = () => {
       let exercises = [...this._exercises];
       if (search) {
-        const q = search.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+        const q = normalize(search);
         exercises = exercises.filter(ex =>
-          ex.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(q)
+          normalize(ex.name).includes(q)
         );
       } else {
         exercises.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));

@@ -250,6 +250,67 @@ export function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+/**
+ * Échappe les caractères HTML spéciaux d'une chaîne (& < > " ').
+ * À utiliser avant toute interpolation dans du HTML généré.
+ * @param {string} str
+ * @returns {string}
+ */
+export function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Normalise une chaîne : minuscules, sans accents.
+ * Utile pour les recherches insensibles aux accents.
+ * @param {string} str
+ * @returns {string}
+ */
+export function normalize(str) {
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+/**
+ * Retourne la première lettre majuscule du nom (insensible aux accents),
+ * ou "#" si le nom est vide. Sert au regroupement alphabétique des listes.
+ * @param {string} name
+ * @returns {string}
+ */
+export function groupLetter(name) {
+  const first = name.trim().charAt(0).toUpperCase();
+  // Si c'est un caractère accentué, normaliser
+  return first.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() || '#';
+}
+
+// ── Couleurs d'icônes ────────────────────────────────────────
+
+/** Palette de couleurs pour les icônes initiales */
+export const ICON_COLORS = [
+  '#7c5cbf', '#4caf7d', '#e55353', '#f0a030',
+  '#3b9dd4', '#e0609a', '#5bae8f', '#d4873b',
+];
+
+/**
+ * Retourne une couleur déterministe pour un exercice.
+ * @param {string} id
+ * @returns {string}
+ */
+export function colorForId(id) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return ICON_COLORS[hash % ICON_COLORS.length];
+}
+
 // ── Performance ───────────────────────────────────────────────
 
 /**

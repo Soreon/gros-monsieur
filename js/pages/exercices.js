@@ -1,5 +1,11 @@
 import { t } from '../i18n.js';
-import { uid } from '../utils/helpers.js';
+import {
+  uid,
+  escapeHtml,
+  colorForId,
+  normalize,
+  groupLetter,
+} from '../utils/helpers.js';
 import {
   dbGetAllExercises,
   dbPutExercise,
@@ -37,49 +43,7 @@ const MUSCLE_GROUPS = [
 
 const MUSCLE_NONE = { value: '', key: 'muscle.none' };
 
-/** Palette de couleurs pour les icônes initiales */
-const ICON_COLORS = [
-  '#7c5cbf', '#4caf7d', '#e55353', '#f0a030',
-  '#3b9dd4', '#e0609a', '#5bae8f', '#d4873b',
-];
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Normalise une chaîne : minuscules, sans accents.
- * @param {string} str
- * @returns {string}
- */
-function normalize(str) {
-  return str
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-}
-
-/**
- * Retourne une couleur déterministe pour un exercice.
- * @param {string} id
- * @returns {string}
- */
-function colorForId(id) {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  }
-  return ICON_COLORS[hash % ICON_COLORS.length];
-}
-
-/**
- * Retourne la première lettre majuscule du nom (insensible aux accents).
- * @param {string} name
- * @returns {string}
- */
-function groupLetter(name) {
-  const first = name.trim().charAt(0).toUpperCase();
-  // Si c'est un caractère accentué, normaliser
-  return first.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() || '#';
-}
 
 /**
  * Trie un tableau d'exercices selon le mode de tri.
@@ -901,15 +865,4 @@ export default class ExercicesPage {
     overlay.innerHTML = '';
     overlay.onclick   = null;
   }
-}
-
-// ── Utilitaire ────────────────────────────────────────────────────────────────
-
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

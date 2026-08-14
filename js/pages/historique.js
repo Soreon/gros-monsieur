@@ -11,19 +11,12 @@ import {
   formatMonthYear,
   groupBy,
   formatWeight,
+  escapeHtml,
 } from '../utils/helpers.js';
 
 // ---------------------------------------------------------------------------
 // Local helper
 // ---------------------------------------------------------------------------
-
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 // Set type abbreviation
 function setTypeAbbr(type) {

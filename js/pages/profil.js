@@ -13,6 +13,7 @@ import {
   getLast8Weeks,
   startOfWeek,
   isSameDay,
+  escapeHtml,
 } from '../utils/helpers.js';
 import {
   dbGetProfile,
@@ -27,14 +28,6 @@ import { exportData, importData } from '../utils/export.js';
 // =============================================================================
 // Local helpers
 // =============================================================================
-
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 /** Default profile skeleton (in case initDB hasn't run yet). */
 function _defaultProfile() {

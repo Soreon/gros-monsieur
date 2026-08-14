@@ -3,7 +3,7 @@
 // =============================================================================
 
 import { t } from '../i18n.js';
-import { uid, formatDate, formatDateShort } from '../utils/helpers.js';
+import { uid, formatDate, formatDateShort, escapeHtml } from '../utils/helpers.js';
 import {
   dbGetAllMeasurements,
   dbPutMeasurement,
@@ -13,14 +13,6 @@ import {
 // ---------------------------------------------------------------------------
 // Local helper
 // ---------------------------------------------------------------------------
-
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 /**
  * Format a delta value to at most 1 decimal, stripping trailing ".0".
