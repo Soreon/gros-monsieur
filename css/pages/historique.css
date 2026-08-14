@@ -53,12 +53,22 @@
    ============================================================ */
 
 /**
- * Bandeau collant qui sépare les séances par mois.
- * Reste visible pendant le défilement, juste en dessous du header de page.
+ * Section d'un mois (bandeau + cartes de séances).
+ * ⚠ Seul le bandeau __label est sticky : rendre la section entière sticky
+ * ferait s'empiler tous les mois (et leurs cartes) en haut au défilement.
  */
 .hist-month {
+  display: block;
+  margin-bottom: var(--space-4);
+}
+
+/* "Février 2026" */
+/* Bandeau collant du mois — se fait remplacer par le suivant au défilement.
+   top: 0 = haut du conteneur de scroll (#page-container), le header de page
+   n'étant pas fixe. */
+.hist-month__label {
   position: sticky;
-  top: var(--page-header-height, 56px);
+  top: 0;
   z-index: var(--z-sticky, 2);
 
   display: flex;
@@ -66,15 +76,12 @@
   justify-content: space-between;
   gap: var(--space-3);
 
-  padding: var(--space-1) 0;
+  padding: var(--space-2) 0;
   margin-bottom: var(--space-2);
 
   background: var(--bg);
   border-bottom: 1px solid var(--border);
-}
 
-/* "Février 2026" */
-.hist-month__label {
   font-size: var(--text-sm);
   font-weight: var(--fw-bold);
   color: var(--text-secondary);
@@ -497,11 +504,6 @@
    ============================================================ */
 
 @media (min-width: 680px) {
-  /* Le sticky top doit correspondre au padding étendu de .page sur desktop */
-  .hist-month {
-    top: var(--page-header-height, 60px);
-  }
-
   /* Les cartes bénéficient d'un rayon plus généreux sur grand écran */
   .hist-card {
     border-radius: var(--radius-lg);
