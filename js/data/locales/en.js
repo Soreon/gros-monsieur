@@ -136,7 +136,6 @@ export default {
   'plates.total':              'Total weight',
   'plates.palette':            'Add plates',
   'plates.reset':              'Reset',
-  'plates.empty_bar':          'Bar only',
   'plates.add_aria':           'Add a {w} kg plate',
   'plates.remove_aria':        'Remove a {w} kg plate',
 

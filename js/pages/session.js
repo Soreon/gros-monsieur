@@ -1189,23 +1189,27 @@ export default class SessionOverlay {
       <button class="plate-calc__bar${w === barWeight ? ' plate-calc__bar--active' : ''}"
               data-action="plate-bar" data-bar="${w}">${w} kg</button>`).join('');
 
-    const stackHtml = () => {
-      const loaded = PLATE_SET.filter(w => counts[w] > 0);
-      if (!loaded.length) {
-        return `<span class="plate-calc__badge plate-calc__badge--empty">${t('plates.empty_bar')}</span>`;
-      }
-      return loaded.map(w => `
-        <button class="plate-calc__stack-item" data-action="plate-remove" data-w="${w}"
-                aria-label="${t('plates.remove_aria', { w })}">
-          <span class="plate-calc__plate plate-calc__plate--sm ${plateClass(w)}">${w}</span>
-          <span class="plate-calc__count">×${counts[w]}</span>
-        </button>`).join('');
+    // Vue latérale de la barre : manche + épaulement + disques (un rectangle
+    // vertical par disque, du plus lourd au plus léger, comme en vrai).
+    // Taper un disque sur la barre le retire.
+    const barbellHtml = () => {
+      const plates = [];
+      PLATE_SET.forEach(w => { for (let i = 0; i < counts[w]; i++) plates.push(w); });
+      const platesHtml = plates.map(w => `
+        <button class="barbell__plate ${plateClass(w)}" data-action="plate-remove" data-w="${w}"
+                aria-label="${t('plates.remove_aria', { w })}">${w}</button>`).join('');
+      return `
+        <div class="barbell">
+          <span class="barbell__bar-end">${barWeight} kg</span>
+          <span class="barbell__collar"></span>
+          <div class="barbell__plates">${platesHtml}</div>
+        </div>`;
     };
 
     const update = () => {
       const stackEl = document.getElementById('plate-calc-stack');
       const totalEl = document.getElementById('plate-calc-total');
-      if (stackEl) stackEl.innerHTML = stackHtml();
+      if (stackEl) stackEl.innerHTML = barbellHtml();
       if (totalEl) totalEl.textContent = `${totalKg()} kg`;
     };
 
@@ -1231,7 +1235,7 @@ export default class SessionOverlay {
             <span class="plate-calc__label">${t('plates.per_side')}</span>
             <button class="plate-calc__reset" data-action="plate-reset">${t('plates.reset')}</button>
           </div>
-          <div class="plate-calc__stack" id="plate-calc-stack"></div>
+          <div id="plate-calc-stack"></div>
         </div>
       </div>`, {
       // Backdrop → fermeture (dismissible par défaut)

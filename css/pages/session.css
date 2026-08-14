@@ -1554,14 +1554,6 @@
   transform: scale(0.92);
 }
 
-/* Version réduite pour la pile « par côté » */
-.plate-calc__plate--sm {
-  width: 36px;
-  height: 36px;
-  font-size: var(--text-xs);
-  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.22);
-}
-
 /* Couleurs IPF/IWF : 25 rouge, 20 bleu, 15 jaune, 10 vert, 5 blanc/gris,
    2.5 noir, 1.25 chromé */
 .plate--25   { background: #d64040; color: #fff; }
@@ -1572,7 +1564,7 @@
 .plate--2-5  { background: #23262c; color: #fff; box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.28); }
 .plate--1-25 { background: #9aa0aa; color: #23262c; }
 
-/* --- Pile « par côté » (tap = retirer un disque) -------------------------- */
+/* --- Barre graphique « par côté » (tap sur un disque = le retirer) -------- */
 
 .plate-calc__stack-head {
   display: flex;
@@ -1594,44 +1586,99 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.plate-calc__stack {
+/* Vue latérale : le manche traverse toute la largeur (::before), le bloc de
+   gauche porte le poids de la barre, puis l'épaulement et les disques.
+   Acier gris fixe (#6e7686) : lisible sur les deux thèmes, comme les
+   couleurs IPF des disques. */
+.barbell {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  min-height: 48px;
   align-items: center;
+  height: 132px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
-.plate-calc__stack-item {
+.barbell::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 12px;
+  transform: translateY(-50%);
+  background: #6e7686;
+  border-radius: 3px;
+}
+
+/* Extrémité gauche : bloc épais portant le poids de la barre */
+.barbell__bar-end {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  padding: 3px var(--space-2) 3px 3px;
+  height: 38px;
+  padding: 0 var(--space-3);
+  background: #6e7686;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Épaulement : butée contre laquelle s'appuient les disques */
+.barbell__collar {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 10px;
+  height: 48px;
+  margin-left: var(--space-3);
+  background: #6e7686;
+  border-radius: 3px;
+}
+
+.barbell__plates {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 3px;
+  flex-shrink: 0;
+}
+
+/* Disque vu de profil : rectangle vertical arrondi, chiffre vertical
+   (lecture de bas en haut). Hauteur/largeur proportionnelles au disque. */
+.barbell__plate {
+  border: none;
+  border-radius: 6px;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: none;
   -webkit-tap-highlight-color: transparent;
 }
 
-.plate-calc__stack-item:active {
+.barbell__plate:active {
   opacity: 0.8;
 }
 
-.plate-calc__count {
-  font-size: var(--text-sm);
-  font-weight: var(--fw-bold);
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Variante « barre seule » — pile vide */
-.plate-calc__badge--empty {
-  padding: var(--space-2) var(--space-3);
-  background: var(--bg-input);
-  color: var(--text-secondary);
-  border-radius: var(--radius-full);
-  font-size: var(--text-sm);
-  font-weight: var(--fw-bold);
-  white-space: nowrap;
-}
+.barbell__plate.plate--25   { height: 116px; width: 30px; }
+.barbell__plate.plate--20   { height: 108px; width: 28px; }
+.barbell__plate.plate--15   { height: 94px;  width: 24px; }
+.barbell__plate.plate--10   { height: 78px;  width: 21px; }
+.barbell__plate.plate--5    { height: 60px;  width: 17px; }
+.barbell__plate.plate--2-5  { height: 46px;  width: 15px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.28); }
+.barbell__plate.plate--1-25 { height: 36px;  width: 13px; }
