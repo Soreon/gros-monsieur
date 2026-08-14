@@ -124,6 +124,7 @@ export default {
   'session.best_set':          'Best set',
   'session.free_name':         'Empty workout',
   'session.remove_exercise':   'Remove exercise',
+  'session.replace_exercise':  'Replace exercise',
   'session.no_sets':           'No completed sets',
   'session.resumed':           'Workout resumed',
   'session.incomplete_sets_prompt': 'Some sets are incomplete. Keep them?',

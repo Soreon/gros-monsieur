@@ -1080,6 +1080,10 @@ export default class SessionOverlay {
           <i class="fa-solid fa-calculator"></i>
           ${t('plates.title')}
         </div>
+        <div class="action-sheet__item" data-action="replace-ex" data-ex-idx="${exIdx}">
+          <i class="fa-solid fa-right-left"></i>
+          ${t('session.replace_exercise')}
+        </div>
         <div class="action-sheet__item action-sheet__item--danger" data-action="remove-ex" data-ex-idx="${exIdx}">
           <i class="fa-solid fa-trash"></i>
           ${t('session.remove_exercise')}
@@ -1097,6 +1101,9 @@ export default class SessionOverlay {
           // Remplace le contenu de la modale par le calculateur (openModal
           // rouvre à chaud, sans fermer l'overlay)
           this._openPlateCalc(parseInt(target.dataset.exIdx, 10));
+        } else if (target.dataset.action === 'replace-ex') {
+          // Bascule à chaud vers le picker en mode remplacement
+          this._openExercisePicker(parseInt(target.dataset.exIdx, 10));
         } else if (target.dataset.action === 'remove-ex') {
           const [removed] = this._session.exercises.splice(parseInt(target.dataset.exIdx), 1);
           // Si le repos en cours appartenait à cet exercice, l'arrêter
@@ -1290,8 +1297,15 @@ export default class SessionOverlay {
   // Exercise picker
   // ---------------------------------------------------------------------------
 
-  _openExercisePicker() {
+  /**
+   * Picker d'exercices plein écran.
+   * Sans argument : ajoute l'exercice choisi à la séance.
+   * Avec `replaceExIdx` : remplace l'exercice à cet index en CONSERVANT ses
+   * séries (poids, réps, coches) — cf. _replaceExercise.
+   */
+  _openExercisePicker(replaceExIdx = null) {
     let search = '';
+    const isReplace = replaceExIdx !== null && !isNaN(replaceExIdx);
 
     const onClick = (e) => {
       const target = e.target.closest('[data-action]');
@@ -1302,6 +1316,10 @@ export default class SessionOverlay {
       }
       if (target.dataset.action === 'pick-exercise') {
         const exId = target.dataset.id;
+        if (isReplace) {
+          this._replaceExercise(replaceExIdx, exId);
+          return;
+        }
         this._session.exercises.push({
           exerciseId: exId,
           sets: [{ type: 'normal', weight: 0, reps: 0, completed: false, isPR: false }],
@@ -1355,7 +1373,7 @@ export default class SessionOverlay {
         <div class="picker-fullscreen">
           <div class="picker-fullscreen__header">
             <button class="btn btn--icon" data-action="close-picker"><i class="fa-solid fa-xmark"></i></button>
-            <span class="picker-fullscreen__title">${t('workout.choose_exercise')}</span>
+            <span class="picker-fullscreen__title">${isReplace ? t('session.replace_exercise') : t('workout.choose_exercise')}</span>
           </div>
           <div class="picker-fullscreen__search">
             <i class="fa-solid fa-magnifying-glass picker-fullscreen__search-icon"></i>
@@ -1377,6 +1395,63 @@ export default class SessionOverlay {
 
     renderPicker();
     setTimeout(() => document.getElementById('session-picker-search')?.focus(), 50);
+  }
+
+  /**
+   * Remplace l'exercice à `exIdx` par `newExerciseId` en conservant toutes
+   * ses séries (poids, réps, types, coches). L'objet exercice est muté EN
+   * PLACE : son tableau `sets` garde son identité, donc les références du
+   * minuteur de repos (_restEx/_restSet) restent valides.
+   */
+  async _replaceExercise(exIdx, newExerciseId) {
+    const ex = this._session?.exercises[exIdx];
+    if (!ex || ex.exerciseId === newExerciseId) {
+      closeModal();
+      return;
+    }
+
+    const oldId = ex.exerciseId;
+    ex.exerciseId = newExerciseId;
+
+    // PR de l'ancien exercice : il perd la contribution de ces séries.
+    this._recomputeExercisePR(oldId);
+
+    // PR du nouveau : réévalue les drapeaux isPR des séries conservées contre
+    // l'historique du nouvel exercice (+ ses autres occurrences dans la séance).
+    let best = this._basePRHistory[newExerciseId] || 0;
+    for (const other of this._session.exercises) {
+      if (other === ex || other.exerciseId !== newExerciseId) continue;
+      for (const s of other.sets) {
+        if (s.completed && s.type !== 'timer') {
+          best = Math.max(best, estimate1RM(s.weight, s.reps));
+        }
+      }
+    }
+    for (const s of ex.sets) {
+      if (s.type === 'timer') continue;
+      if (s.completed) {
+        const e1rm = estimate1RM(s.weight, s.reps);
+        s.isPR = e1rm > best;
+        if (e1rm > best) best = e1rm;
+      } else {
+        s.isPR = false;
+      }
+    }
+    if (best > 0) this._prHistory[newExerciseId] = best;
+    else delete this._prHistory[newExerciseId];
+
+    this._saveDraft();
+    closeModal();
+    this._render();
+
+    // Colonne « précédent » du nouvel exercice — rechargée en arrière-plan,
+    // puis re-render ciblé du bloc. Non bloquant si la lecture échoue.
+    try {
+      const sessions = await dbGetAllSessions();
+      const prevMode = this._settings?.previousSets || 'same_routine';
+      this._computePrevSets(sessions, this._session.routineId, prevMode);
+      this._reRenderExerciseBlock(exIdx);
+    } catch { /* la colonne précédent restera vide pour ce bloc */ }
   }
 
   // ---------------------------------------------------------------------------

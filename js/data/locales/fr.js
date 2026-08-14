@@ -124,6 +124,7 @@ export default {
   'session.best_set':          'Meilleure série',
   'session.free_name':         'Entraînement libre',
   'session.remove_exercise':   'Retirer l\'exercice',
+  'session.replace_exercise':  'Remplacer l\'exercice',
   'session.no_sets':           'Aucune série complétée',
   'session.resumed':           'Séance en cours reprise',
   'session.incomplete_sets_prompt': 'Des séries ne sont pas complétées. Les conserver ?',
