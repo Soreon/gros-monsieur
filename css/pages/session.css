@@ -1475,40 +1475,20 @@
   margin-top: var(--space-2);
 }
 
-/* Champ poids total — grands chiffres centrés, comme les inputs de série */
-.plate-calc__input {
-  width: 100%;
-  height: 48px;
-  box-sizing: border-box;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-size: var(--text-lg);
+/* Poids total calculé — gros chiffres, mis à jour en direct */
+.plate-calc__total-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.plate-calc__total {
+  font-size: 28px;
   font-weight: var(--fw-bold);
+  color: var(--text);
   font-variant-numeric: tabular-nums;
-  text-align: center;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.plate-calc__input:focus {
-  border-color: var(--accent);
-}
-
-.plate-calc__input::placeholder {
-  color: var(--text-disabled);
-}
-
-/* Masque les spinners (cohérent avec .session-set-row__input) */
-.plate-calc__input[type="number"] {
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-.plate-calc__input[type="number"]::-webkit-inner-spin-button,
-.plate-calc__input[type="number"]::-webkit-outer-spin-button {
-  display: none;
+  white-space: nowrap;
 }
 
 /* Sélecteur de barre — boutons segmentés */
@@ -1541,44 +1521,117 @@
   color: var(--accent);
 }
 
-/* Résultat : badges « n × p kg » par côté */
-.plate-calc__result {
-  min-height: 44px;
-}
+/* --- Palette de disques (tap = ajouter un disque par côté) --------------- */
 
-.plate-calc__badges {
+.plate-calc__palette {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
 
-.plate-calc__badge {
-  padding: var(--space-2) var(--space-3);
-  background: var(--accent-dim);
-  color: var(--accent);
-  border-radius: var(--radius-full);
+/* Disque rond — couleurs officielles de compétition, codées en dur (couleurs
+   du monde réel, identiques dans les deux thèmes). Le texte est choisi par
+   disque pour rester lisible sur chaque couleur. */
+.plate-calc__plate {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: var(--text-sm);
   font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.22);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s;
 }
 
-/* Variante « barre seule » — neutre, pas de disque à charger */
-.plate-calc__badge--empty {
-  background: var(--bg-input);
+.plate-calc__plate:active {
+  transform: scale(0.92);
+}
+
+/* Version réduite pour la pile « par côté » */
+.plate-calc__plate--sm {
+  width: 36px;
+  height: 36px;
+  font-size: var(--text-xs);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.22);
+}
+
+/* Couleurs IPF/IWF : 25 rouge, 20 bleu, 15 jaune, 10 vert, 5 blanc/gris,
+   2.5 noir, 1.25 chromé */
+.plate--25   { background: #d64040; color: #fff; }
+.plate--20   { background: #2f6fd0; color: #fff; }
+.plate--15   { background: #e6b820; color: #3a2f05; }
+.plate--10   { background: #3fae62; color: #fff; }
+.plate--5    { background: #d8dbe0; color: #2b2f36; }
+.plate--2-5  { background: #23262c; color: #fff; box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.28); }
+.plate--1-25 { background: #9aa0aa; color: #23262c; }
+
+/* --- Pile « par côté » (tap = retirer un disque) -------------------------- */
+
+.plate-calc__stack-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.plate-calc__reset {
+  background: none;
+  border: none;
   color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-semi);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  padding: var(--space-1) 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Mention « charge possible » quand le poids exact n'est pas atteignable */
-.plate-calc__note {
-  margin: var(--space-2) 0 0;
+.plate-calc__stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-height: 48px;
+  align-items: center;
+}
+
+.plate-calc__stack-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: 3px var(--space-2) 3px 3px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.plate-calc__stack-item:active {
+  opacity: 0.8;
+}
+
+.plate-calc__count {
   font-size: var(--text-sm);
-  color: var(--warning);
+  font-weight: var(--fw-bold);
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
-/* État vide (aucun poids saisi) */
-.plate-calc__placeholder {
-  color: var(--text-disabled);
-  font-size: var(--text-base);
+/* Variante « barre seule » — pile vide */
+.plate-calc__badge--empty {
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
 }

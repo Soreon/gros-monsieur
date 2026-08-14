@@ -1146,51 +1146,67 @@ export default class SessionOverlay {
   }
 
   /**
-   * HTML du résultat : badges « n × p kg » par côté + mention si le poids
-   * demandé n'est pas atteignable exactement. Uniquement des nombres et des
+   * Composeur de barre : on ajoute des disques (par côté) en tapant sur la
+   * palette, on en retire en tapant sur la pile, et le poids total
+   * (barre + 2 × côté) se calcule en direct. Uniquement des nombres et des
    * chaînes de locale — aucun texte utilisateur.
    */
-  _buildPlateCalcResult(total, bar) {
-    if (!(total > 0)) {
-      return `<span class="plate-calc__placeholder">—</span>`;
-    }
-    const { perSide, achieved, exact } = this._computePlates(total, bar);
-    const badges = perSide.length
-      ? perSide.map(p => `<span class="plate-calc__badge">${p.count} × ${p.weight} kg</span>`).join('')
-      : `<span class="plate-calc__badge plate-calc__badge--empty">${t('plates.empty_bar')}</span>`;
-    const note = exact
-      ? ''
-      : `<p class="plate-calc__note">${t('plates.unreachable', { w: achieved })}</p>`;
-    return `<div class="plate-calc__badges">${badges}</div>${note}`;
-  }
-
   _openPlateCalc(exIdx) {
     const ex = this._session?.exercises[exIdx];
-
-    // Préremplissage : poids de la dernière série renseignée (non-timer)
-    let prefill = 0;
-    if (ex) {
-      for (let i = ex.sets.length - 1; i >= 0; i--) {
-        const s = ex.sets[i];
-        if (s.type !== 'timer' && s.weight > 0) { prefill = s.weight; break; }
-      }
-    }
 
     // Barre persistée : profile.settings.plateCalc.barWeight (défensif si absent)
     let barWeight = parseFloat(this._settings?.plateCalc?.barWeight);
     if (!BAR_OPTIONS.includes(barWeight)) barWeight = 20;
 
+    // Pré-composition : décompose le poids de la dernière série renseignée
+    // (non-timer) en disques, pour ouvrir la modale déjà chargée.
+    const counts = {}; // poids (string) → nombre de disques PAR CÔTÉ
+    PLATE_SET.forEach(w => { counts[w] = 0; });
+    if (ex) {
+      for (let i = ex.sets.length - 1; i >= 0; i--) {
+        const s = ex.sets[i];
+        if (s.type !== 'timer' && s.weight > 0) {
+          this._computePlates(s.weight, barWeight).perSide
+            .forEach(p => { counts[p.weight] = p.count; });
+          break;
+        }
+      }
+    }
+
+    // Total en quarts de kg (entiers) pour éviter les erreurs de flottants.
+    const totalKg = () => {
+      const sideQ = PLATE_SET.reduce((sum, w) => sum + counts[w] * Math.round(w * 4), 0);
+      return (Math.round(barWeight * 4) + 2 * sideQ) / 4;
+    };
+
+    const plateClass = (w) => `plate--${String(w).replace('.', '-')}`;
+
+    const paletteHtml = PLATE_SET.map(w => `
+      <button class="plate-calc__plate ${plateClass(w)}" data-action="plate-add" data-w="${w}"
+              aria-label="${t('plates.add_aria', { w })}">${w}</button>`).join('');
+
     const barsHtml = BAR_OPTIONS.map(w => `
       <button class="plate-calc__bar${w === barWeight ? ' plate-calc__bar--active' : ''}"
               data-action="plate-bar" data-bar="${w}">${w} kg</button>`).join('');
 
-    // Recalcul en direct — l'input vit dans la modale et disparaît avec elle
-    // (closeModal vide innerHTML) : aucun listener persistant.
+    const stackHtml = () => {
+      const loaded = PLATE_SET.filter(w => counts[w] > 0);
+      if (!loaded.length) {
+        return `<span class="plate-calc__badge plate-calc__badge--empty">${t('plates.empty_bar')}</span>`;
+      }
+      return loaded.map(w => `
+        <button class="plate-calc__stack-item" data-action="plate-remove" data-w="${w}"
+                aria-label="${t('plates.remove_aria', { w })}">
+          <span class="plate-calc__plate plate-calc__plate--sm ${plateClass(w)}">${w}</span>
+          <span class="plate-calc__count">×${counts[w]}</span>
+        </button>`).join('');
+    };
+
     const update = () => {
-      const resultEl = document.getElementById('plate-calc-result');
-      if (!resultEl) return;
-      const total = Math.max(0, parseFloat(document.getElementById('plate-calc-weight')?.value) || 0);
-      resultEl.innerHTML = this._buildPlateCalcResult(total, barWeight);
+      const stackEl = document.getElementById('plate-calc-stack');
+      const totalEl = document.getElementById('plate-calc-total');
+      if (stackEl) stackEl.innerHTML = stackHtml();
+      if (totalEl) totalEl.textContent = `${totalKg()} kg`;
     };
 
     const { el } = openModal(`
@@ -1203,23 +1219,42 @@ export default class SessionOverlay {
           </button>
         </div>
         <div class="plate-calc__body">
-          <label class="plate-calc__label" for="plate-calc-weight">${t('plates.total')}</label>
-          <input class="plate-calc__input" id="plate-calc-weight"
-                 type="number" min="0" step="0.5" inputmode="decimal"
-                 placeholder="—" value="${prefill > 0 ? prefill : ''}">
+          <div class="plate-calc__total-row">
+            <span class="plate-calc__label">${t('plates.total')}</span>
+            <span class="plate-calc__total" id="plate-calc-total"></span>
+          </div>
           <span class="plate-calc__label">${t('plates.bar')}</span>
           <div class="plate-calc__bars">${barsHtml}</div>
-          <span class="plate-calc__label">${t('plates.per_side')}</span>
-          <div class="plate-calc__result" id="plate-calc-result"></div>
+          <span class="plate-calc__label">${t('plates.palette')}</span>
+          <div class="plate-calc__palette">${paletteHtml}</div>
+          <div class="plate-calc__stack-head">
+            <span class="plate-calc__label">${t('plates.per_side')}</span>
+            <button class="plate-calc__reset" data-action="plate-reset">${t('plates.reset')}</button>
+          </div>
+          <div class="plate-calc__stack" id="plate-calc-stack"></div>
         </div>
       </div>`, {
       // Backdrop → fermeture (dismissible par défaut)
       onClick: (e) => {
         const target = e.target.closest('[data-action]');
         if (!target) return;
-        if (target.dataset.action === 'close-plate-calc') {
+        const action = target.dataset.action;
+        if (action === 'close-plate-calc') {
           closeModal();
-        } else if (target.dataset.action === 'plate-bar') {
+        } else if (action === 'plate-add') {
+          const w = parseFloat(target.dataset.w);
+          if (counts[w] === undefined) return;
+          counts[w]++;
+          update();
+        } else if (action === 'plate-remove') {
+          const w = parseFloat(target.dataset.w);
+          if (!(counts[w] > 0)) return;
+          counts[w]--;
+          update();
+        } else if (action === 'plate-reset') {
+          PLATE_SET.forEach(w => { counts[w] = 0; });
+          update();
+        } else if (action === 'plate-bar') {
           const w = parseFloat(target.dataset.bar);
           if (!BAR_OPTIONS.includes(w)) return;
           barWeight = w;
@@ -1229,9 +1264,6 @@ export default class SessionOverlay {
           update();
           this._savePlateCalcBar(w);
         }
-      },
-      onInput: (e) => {
-        if (e.target.id === 'plate-calc-weight') update();
       },
     });
     update();

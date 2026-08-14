@@ -133,9 +133,12 @@ export default {
   'plates.title':              'Calculateur de disques',
   'plates.bar':                'Barre',
   'plates.per_side':           'Par côté',
-  'plates.total':              'Poids total (kg)',
-  'plates.unreachable':        'Charge possible : {w} kg',
+  'plates.total':              'Poids total',
+  'plates.palette':            'Ajouter des disques',
+  'plates.reset':              'Réinitialiser',
   'plates.empty_bar':          'Barre seule',
+  'plates.add_aria':           'Ajouter un disque de {w} kg',
+  'plates.remove_aria':        'Retirer un disque de {w} kg',
 
   /* ── Page Exercices ── */
   'exercises.title':           'Exercices',

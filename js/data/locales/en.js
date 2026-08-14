@@ -133,9 +133,12 @@ export default {
   'plates.title':              'Plate calculator',
   'plates.bar':                'Bar',
   'plates.per_side':           'Per side',
-  'plates.total':              'Total weight (kg)',
-  'plates.unreachable':        'Loadable: {w} kg',
+  'plates.total':              'Total weight',
+  'plates.palette':            'Add plates',
+  'plates.reset':              'Reset',
   'plates.empty_bar':          'Bar only',
+  'plates.add_aria':           'Add a {w} kg plate',
+  'plates.remove_aria':        'Remove a {w} kg plate',
 
   /* ── Exercises page ── */
   'exercises.title':           'Exercises',
