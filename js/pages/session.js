@@ -19,6 +19,7 @@ import {
   dbSaveProfile,
 } from '../db.js';
 import { setState, getState } from '../store.js';
+import { openModal, closeModal } from '../components/modal.js';
 
 // Clé localStorage du brouillon de séance active (persistance anti-crash/refresh)
 const DRAFT_KEY = 'gm-active-session';
@@ -1068,9 +1069,8 @@ export default class SessionOverlay {
   _openExerciseMenu(exIdx) {
     const ex       = this._session.exercises[exIdx];
     const exercise = this._getExercise(ex.exerciseId);
-    const overlay  = document.getElementById('modal-overlay');
 
-    overlay.innerHTML = `
+    openModal(`
       <div class="action-sheet">
         <div class="action-sheet__title">${exercise ? escapeHtml(exercise.name) : '?'}</div>
         <div class="action-sheet__item" data-action="open-plate-calc" data-ex-idx="${exIdx}">
@@ -1085,29 +1085,29 @@ export default class SessionOverlay {
           <i class="fa-solid fa-xmark"></i>
           ${t('action.cancel')}
         </div>
-      </div>`;
-    overlay.classList.remove('hidden');
-
-    overlay.onclick = (e) => {
-      if (e.target === overlay) { this._closeModal(); return; }
-      const target = e.target.closest('[data-action]');
-      if (!target) return;
-      if (target.dataset.action === 'open-plate-calc') {
-        // Remplace le contenu du modal-overlay (et son onclick) par le calculateur
-        this._openPlateCalc(parseInt(target.dataset.exIdx, 10));
-      } else if (target.dataset.action === 'remove-ex') {
-        const [removed] = this._session.exercises.splice(parseInt(target.dataset.exIdx), 1);
-        // Si le repos en cours appartenait à cet exercice, l'arrêter
-        if (removed && this._restEx === removed) this._stopRestTimerImmediate();
-        if (removed) this._recomputeExercisePR(removed.exerciseId);
-        this._saveDraft();
-        this._closeModal();
-        // Re-render entire overlay content to reflect removal
-        this._render();
-      } else if (target.dataset.action === 'close-sheet') {
-        this._closeModal();
-      }
-    };
+      </div>`, {
+      // Backdrop → fermeture (dismissible par défaut)
+      onClick: (e) => {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+        if (target.dataset.action === 'open-plate-calc') {
+          // Remplace le contenu de la modale par le calculateur (openModal
+          // rouvre à chaud, sans fermer l'overlay)
+          this._openPlateCalc(parseInt(target.dataset.exIdx, 10));
+        } else if (target.dataset.action === 'remove-ex') {
+          const [removed] = this._session.exercises.splice(parseInt(target.dataset.exIdx), 1);
+          // Si le repos en cours appartenait à cet exercice, l'arrêter
+          if (removed && this._restEx === removed) this._stopRestTimerImmediate();
+          if (removed) this._recomputeExercisePR(removed.exerciseId);
+          this._saveDraft();
+          closeModal();
+          // Re-render entire overlay content to reflect removal
+          this._render();
+        } else if (target.dataset.action === 'close-sheet') {
+          closeModal();
+        }
+      },
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -1177,12 +1177,20 @@ export default class SessionOverlay {
     let barWeight = parseFloat(this._settings?.plateCalc?.barWeight);
     if (!BAR_OPTIONS.includes(barWeight)) barWeight = 20;
 
-    const overlay = document.getElementById('modal-overlay');
     const barsHtml = BAR_OPTIONS.map(w => `
       <button class="plate-calc__bar${w === barWeight ? ' plate-calc__bar--active' : ''}"
               data-action="plate-bar" data-bar="${w}">${w} kg</button>`).join('');
 
-    overlay.innerHTML = `
+    // Recalcul en direct — l'input vit dans la modale et disparaît avec elle
+    // (closeModal vide innerHTML) : aucun listener persistant.
+    const update = () => {
+      const resultEl = document.getElementById('plate-calc-result');
+      if (!resultEl) return;
+      const total = Math.max(0, parseFloat(document.getElementById('plate-calc-weight')?.value) || 0);
+      resultEl.innerHTML = this._buildPlateCalcResult(total, barWeight);
+    };
+
+    const { el } = openModal(`
       <div class="modal plate-calc">
         <div class="modal__handle"></div>
         <div class="plate-calc__header">
@@ -1201,37 +1209,29 @@ export default class SessionOverlay {
           <span class="plate-calc__label">${t('plates.per_side')}</span>
           <div class="plate-calc__result" id="plate-calc-result"></div>
         </div>
-      </div>`;
-    overlay.classList.remove('hidden');
-
-    // Recalcul en direct — l'input vit dans le modal-overlay et disparaît
-    // avec lui (_closeModal vide innerHTML) : aucun listener persistant.
-    const update = () => {
-      const resultEl = document.getElementById('plate-calc-result');
-      if (!resultEl) return;
-      const total = Math.max(0, parseFloat(document.getElementById('plate-calc-weight')?.value) || 0);
-      resultEl.innerHTML = this._buildPlateCalcResult(total, barWeight);
-    };
+      </div>`, {
+      // Backdrop → fermeture (dismissible par défaut)
+      onClick: (e) => {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+        if (target.dataset.action === 'close-plate-calc') {
+          closeModal();
+        } else if (target.dataset.action === 'plate-bar') {
+          const w = parseFloat(target.dataset.bar);
+          if (!BAR_OPTIONS.includes(w)) return;
+          barWeight = w;
+          el.querySelectorAll('.plate-calc__bar').forEach(btn => {
+            btn.classList.toggle('plate-calc__bar--active', parseFloat(btn.dataset.bar) === w);
+          });
+          update();
+          this._savePlateCalcBar(w);
+        }
+      },
+      onInput: (e) => {
+        if (e.target.id === 'plate-calc-weight') update();
+      },
+    });
     update();
-    overlay.querySelector('#plate-calc-weight')?.addEventListener('input', update);
-
-    overlay.onclick = (e) => {
-      if (e.target === overlay) { this._closeModal(); return; }
-      const target = e.target.closest('[data-action]');
-      if (!target) return;
-      if (target.dataset.action === 'close-plate-calc') {
-        this._closeModal();
-      } else if (target.dataset.action === 'plate-bar') {
-        const w = parseFloat(target.dataset.bar);
-        if (!BAR_OPTIONS.includes(w)) return;
-        barWeight = w;
-        overlay.querySelectorAll('.plate-calc__bar').forEach(btn => {
-          btn.classList.toggle('plate-calc__bar--active', parseFloat(btn.dataset.bar) === w);
-        });
-        update();
-        this._savePlateCalcBar(w);
-      }
-    };
   }
 
   /** Persiste le choix de barre dans profile.settings.plateCalc.barWeight. */
@@ -1253,7 +1253,39 @@ export default class SessionOverlay {
 
   _openExercisePicker() {
     let search = '';
-    const overlay = document.getElementById('modal-overlay');
+
+    const onClick = (e) => {
+      const target = e.target.closest('[data-action]');
+      if (!target) return;
+      if (target.dataset.action === 'close-picker') {
+        closeModal();
+        return;
+      }
+      if (target.dataset.action === 'pick-exercise') {
+        const exId = target.dataset.id;
+        this._session.exercises.push({
+          exerciseId: exId,
+          sets: [{ type: 'normal', weight: 0, reps: 0, completed: false, isPR: false }],
+          note: '',
+        });
+        this._saveDraft();
+        closeModal();
+        this._render(); // Full re-render to include new exercise
+      }
+    };
+
+    // Recherche : re-render complet du picker puis restauration du focus/curseur
+    const onInput = (e) => {
+      if (e.target.id !== 'session-picker-search') return;
+      search = e.target.value.trim();
+      renderPicker();
+      // Re-focus and restore cursor position to prevent jarring jump
+      const inp = document.getElementById('session-picker-search');
+      if (inp) {
+        inp.focus();
+        inp.setSelectionRange(inp.value.length, inp.value.length);
+      }
+    };
 
     const renderPicker = () => {
       let exercises = [...this._exercises];
@@ -1280,7 +1312,7 @@ export default class SessionOverlay {
           </div>`;
       }).join('');
 
-      overlay.innerHTML = `
+      openModal(`
         <div class="picker-fullscreen">
           <div class="picker-fullscreen__header">
             <button class="btn btn--icon" data-action="close-picker"><i class="fa-solid fa-xmark"></i></button>
@@ -1295,47 +1327,17 @@ export default class SessionOverlay {
           <div class="picker-fullscreen__list exercises-list">
             <div class="exercises-group"><div class="exercises-group__items">${items}</div></div>
           </div>
-        </div>`;
-      overlay.classList.remove('hidden');
-
-      // Re-bind search input after each re-render
-      const searchInput = overlay.querySelector('#session-picker-search');
-      if (searchInput) {
-        searchInput.addEventListener('input', (e) => {
-          search = e.target.value.trim();
-          renderPicker();
-          // Re-focus and restore cursor position to prevent jarring jump
-          const inp = overlay.querySelector('#session-picker-search');
-          if (inp) {
-            inp.focus();
-            inp.setSelectionRange(inp.value.length, inp.value.length);
-          }
-        });
-      }
-    };
-
-    overlay.onclick = (e) => {
-      const target = e.target.closest('[data-action]');
-      if (!target) return;
-      if (target.dataset.action === 'close-picker') {
-        this._closeModal();
-        return;
-      }
-      if (target.dataset.action === 'pick-exercise') {
-        const exId = target.dataset.id;
-        this._session.exercises.push({
-          exerciseId: exId,
-          sets: [{ type: 'normal', weight: 0, reps: 0, completed: false, isPR: false }],
-          note: '',
-        });
-        this._saveDraft();
-        this._closeModal();
-        this._render(); // Full re-render to include new exercise
-      }
+        </div>`, {
+        // Picker plein écran : pas de fermeture au clic backdrop (comportement
+        // historique — fermeture via le bouton ✗ ou Escape)
+        dismissible: false,
+        onClick,
+        onInput,
+      });
     };
 
     renderPicker();
-    setTimeout(() => overlay.querySelector('#session-picker-search')?.focus(), 50);
+    setTimeout(() => document.getElementById('session-picker-search')?.focus(), 50);
   }
 
   // ---------------------------------------------------------------------------
@@ -1343,8 +1345,7 @@ export default class SessionOverlay {
   // ---------------------------------------------------------------------------
 
   _confirmCancel() {
-    const overlay = document.getElementById('modal-overlay');
-    overlay.innerHTML = `
+    openModal(`
       <div class="action-sheet">
         <div class="action-sheet__title">${t('session.cancel_confirm')}</div>
         <p style="padding:var(--space-3) var(--space-4);color:var(--text-secondary);font-size:var(--text-sm);">
@@ -1358,20 +1359,19 @@ export default class SessionOverlay {
           <i class="fa-solid fa-arrow-left"></i>
           ${t('action.back')}
         </div>
-      </div>`;
-    overlay.classList.remove('hidden');
-
-    overlay.onclick = (e) => {
-      if (e.target === overlay) { this._closeModal(); return; }
-      const target = e.target.closest('[data-action]');
-      if (!target) return;
-      if (target.dataset.action === 'confirm-cancel') {
-        this._closeModal();
-        this._cancelSession();
-      } else if (target.dataset.action === 'close-sheet') {
-        this._closeModal();
-      }
-    };
+      </div>`, {
+      // Backdrop → fermeture (dismissible par défaut)
+      onClick: (e) => {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+        if (target.dataset.action === 'confirm-cancel') {
+          closeModal();
+          this._cancelSession();
+        } else if (target.dataset.action === 'close-sheet') {
+          closeModal();
+        }
+      },
+    });
   }
 
   _cancelSession() {
@@ -1516,7 +1516,6 @@ export default class SessionOverlay {
   // ---------------------------------------------------------------------------
 
   _showSummary(session) {
-    const overlay     = document.getElementById('modal-overlay');
     const durationStr = formatDuration(session.duration);
     const volumeStr   = `${session.totalVolume.toLocaleString('fr-FR')} kg`;
 
@@ -1538,7 +1537,7 @@ export default class SessionOverlay {
           </div>`;
       }).join('');
 
-    overlay.innerHTML = `
+    openModal(`
       <div class="modal session-summary">
         <div class="modal__handle"></div>
         <div class="session-summary__header">
@@ -1566,13 +1565,10 @@ export default class SessionOverlay {
             ${t('action.done')}
           </button>
         </div>
-      </div>`;
-    overlay.classList.remove('hidden');
-
-    overlay.onclick = (e) => {
-      const target = e.target.closest('[data-action]');
-      if (target?.dataset.action === 'close-summary' || e.target === overlay) {
-        this._closeModal();
+      </div>`, {
+      // Fermeture (bouton Terminé ou backdrop) → nettoyage de la séance,
+      // garanti une seule fois par le composant.
+      onClose: () => {
         this._hide();
         // Clean up session state
         this._session   = null;
@@ -1583,8 +1579,11 @@ export default class SessionOverlay {
         this._elapsed   = 0;
         // Notify pages so they can refresh their data
         document.dispatchEvent(new CustomEvent('session-complete', { bubbles: true }));
-      }
-    };
+      },
+      onClick: (e) => {
+        if (e.target.closest('[data-action="close-summary"]')) closeModal();
+      },
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -2239,14 +2238,5 @@ export default class SessionOverlay {
     this._draftTimeout = null;
     this._releaseWakeLock();
     document.removeEventListener('visibilitychange', this._onVisibilityChange);
-  }
-
-  _closeModal() {
-    const overlay = document.getElementById('modal-overlay');
-    if (overlay) {
-      overlay.classList.add('hidden');
-      overlay.innerHTML = '';
-      overlay.onclick   = null;
-    }
   }
 }

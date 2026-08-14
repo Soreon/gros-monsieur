@@ -20,6 +20,7 @@ import {
   dbPutRoutine,
   dbDelete,
 } from '../db.js';
+import { openModal, closeModal } from '../components/modal.js';
 
 // ---------------------------------------------------------------------------
 // Class
@@ -53,10 +54,7 @@ export default class EntrainementPage {
   }
 
   destroy() {
-    if (this._handlers.docKeydown) {
-      document.removeEventListener('keydown', this._handlers.docKeydown);
-    }
-    this._closeModal();
+    closeModal();
     clearTimeout(this._longPressTimer);
   }
 
@@ -279,50 +277,50 @@ export default class EntrainementPage {
 
   _openExercisePicker() {
     this._pickerSearch = '';
-    const overlay = document.getElementById('modal-overlay');
-    overlay.classList.remove('hidden');
-    this._renderPickerContent(overlay);
 
-    overlay.onclick = (e) => {
-      const target = e.target.closest('[data-action]');
-      if (!target) return;
-      const action = target.dataset.action;
+    openModal(this._buildPickerContent(), {
+      // Picker plein écran : pas de fermeture au clic backdrop (comportement
+      // historique — fermeture via le bouton ✗ ou Escape)
+      dismissible: false,
+      onClick: (e) => {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+        const action = target.dataset.action;
 
-      if (action === 'close-picker') {
-        this._closeModal();
-        return;
-      }
-      if (action === 'pick-exercise') {
-        const exId = target.dataset.id;
-        if (exId) {
-          this._editRoutine.exercises.push({
-            exerciseId: exId,
-            sets: [{ type: 'normal', reps: 0, weight: 0 }],
-            note: '',
-          });
-          this._closeModal();
-          this._reRenderEditorList();
+        if (action === 'close-picker') {
+          closeModal();
+          return;
         }
-        return;
-      }
-    };
-
-    // Search input live filter — assigned (not addEventListener) so each open
-    // replaces the previous handler; reset to null in _closeModal
-    overlay.oninput = (e) => {
-      if (e.target.id === 'wk-picker-search') {
-        this._pickerSearch = e.target.value.trim();
-        const listEl = document.getElementById('wk-picker-list');
-        if (listEl) listEl.innerHTML = this._buildPickerList();
-      }
-    };
+        if (action === 'pick-exercise') {
+          const exId = target.dataset.id;
+          if (exId) {
+            this._editRoutine.exercises.push({
+              exerciseId: exId,
+              sets: [{ type: 'normal', reps: 0, weight: 0 }],
+              note: '',
+            });
+            closeModal();
+            this._reRenderEditorList();
+          }
+          return;
+        }
+      },
+      // Search input live filter
+      onInput: (e) => {
+        if (e.target.id === 'wk-picker-search') {
+          this._pickerSearch = e.target.value.trim();
+          const listEl = document.getElementById('wk-picker-list');
+          if (listEl) listEl.innerHTML = this._buildPickerList();
+        }
+      },
+    });
 
     // Focus search
     setTimeout(() => document.getElementById('wk-picker-search')?.focus(), 50);
   }
 
-  _renderPickerContent(overlay) {
-    overlay.innerHTML = `
+  _buildPickerContent() {
+    return `
       <div class="picker-fullscreen">
         <div class="picker-fullscreen__header">
           <button class="btn btn--icon" data-action="close-picker" aria-label="${t('action.close')}">
@@ -416,7 +414,6 @@ export default class EntrainementPage {
     const exerciseName = exercise ? exercise.name : '?';
 
     const renderSetsEditor = () => {
-      const overlay = document.getElementById('modal-overlay');
       const sets = exEntry.sets || [];
 
       const typeLabel = (set, si) => {
@@ -492,7 +489,7 @@ export default class EntrainementPage {
       };
       const setsRows = sets.map((set, si) => renderSetRow(set, si)).join('');
 
-      overlay.innerHTML = `
+      openModal(`
         <div class="modal sets-editor">
           <div class="modal__handle"></div>
           <div class="sets-editor__header">
@@ -514,58 +511,50 @@ export default class EntrainementPage {
               ${t('session.add_series')}
             </button>
           </div>
-        </div>`;
+        </div>`, {
+        // Toute fermeture (backdrop, bouton ✗, Escape) resynchronise la liste
+        // de l'éditeur — les re-renders internes (openModal) ne la déclenchent pas
+        onClose: () => this._reRenderEditorList(),
+        onInput: (e) => {
+          const field = e.target.dataset.field;
+          const si = parseInt(e.target.dataset.si);
+          if (!field || isNaN(si)) return;
+          const val = parseFloat(e.target.value) || 0;
+          if (field === 'weight')   exEntry.sets[si].weight   = val;
+          if (field === 'reps')     exEntry.sets[si].reps     = val;
+          if (field === 'duration') exEntry.sets[si].duration = Math.max(1, Math.round(val)) || 90;
+        },
+        onClick: (e) => {
+          const target = e.target.closest('[data-action]');
+          if (!target) return;
+          const action = target.dataset.action;
+          const si = parseInt(target.dataset.si);
 
-      overlay.classList.remove('hidden');
-
-      // Assigned fresh each render — replaces stale handler from previous call
-      overlay.oninput = (e) => {
-        const field = e.target.dataset.field;
-        const si = parseInt(e.target.dataset.si);
-        if (!field || isNaN(si)) return;
-        const val = parseFloat(e.target.value) || 0;
-        if (field === 'weight')   exEntry.sets[si].weight   = val;
-        if (field === 'reps')     exEntry.sets[si].reps     = val;
-        if (field === 'duration') exEntry.sets[si].duration = Math.max(1, Math.round(val)) || 90;
-      };
-
-      overlay.onclick = (e) => {
-        const target = e.target.closest('[data-action]');
-        if (!target) {
-          if (e.target === overlay) {
-            this._closeModal();
-            this._reRenderEditorList();
+          if (action === 'close-sets-editor') {
+            closeModal();
+            return;
           }
-          return;
-        }
-        const action = target.dataset.action;
-        const si = parseInt(target.dataset.si);
-
-        if (action === 'close-sets-editor') {
-          this._closeModal();
-          this._reRenderEditorList();
-          return;
-        }
-        if (action === 'add-set') {
-          const lastSet = exEntry.sets[exEntry.sets.length - 1];
-          exEntry.sets.push({
-            type: 'normal',
-            reps: lastSet ? lastSet.reps : 0,
-            weight: lastSet ? lastSet.weight : 0,
-          });
-          renderSetsEditor();
-          return;
-        }
-        if (action === 'remove-set' && !isNaN(si)) {
-          exEntry.sets.splice(si, 1);
-          renderSetsEditor();
-          return;
-        }
-        if (action === 'show-set-type-picker' && !isNaN(si)) {
-          _showSetTypePicker(target, si);
-          return;
-        }
-      };
+          if (action === 'add-set') {
+            const lastSet = exEntry.sets[exEntry.sets.length - 1];
+            exEntry.sets.push({
+              type: 'normal',
+              reps: lastSet ? lastSet.reps : 0,
+              weight: lastSet ? lastSet.weight : 0,
+            });
+            renderSetsEditor();
+            return;
+          }
+          if (action === 'remove-set' && !isNaN(si)) {
+            exEntry.sets.splice(si, 1);
+            renderSetsEditor();
+            return;
+          }
+          if (action === 'show-set-type-picker' && !isNaN(si)) {
+            _showSetTypePicker(target, si);
+            return;
+          }
+        },
+      });
     };
 
     const _showSetTypePicker = (btn, si) => {
@@ -634,8 +623,49 @@ export default class EntrainementPage {
     const routine = this._routines.find(r => r.id === id);
     if (!routine) return;
 
-    const overlay = document.getElementById('modal-overlay');
-    overlay.innerHTML = `
+    const onClick = async (e) => {
+      const target = e.target.closest('[data-action]');
+      if (!target) return;
+      const action = target.dataset.action;
+      const rid = target.dataset.id;
+
+      if (action === 'edit-routine') {
+        closeModal();
+        this._showEdit(this._routines.find(r => r.id === rid));
+        return;
+      }
+      if (action === 'duplicate-routine') {
+        await this._duplicateRoutine(rid);
+        return;
+      }
+      if (action === 'confirm-delete-routine') {
+        // Étape de confirmation : remplace le contenu de la modale (même handler)
+        openModal(`
+          <div class="action-sheet">
+            <div class="action-sheet__title">${t('workout.delete_confirm')}</div>
+            <p style="padding:var(--space-3) var(--space-4);color:var(--text-secondary);font-size:var(--text-sm);">${t('workout.delete_confirm_sub')}</p>
+            <div class="action-sheet__item action-sheet__item--danger" data-action="delete-routine" data-id="${rid}">
+              <i class="fa-solid fa-trash"></i>
+              ${t('action.delete')}
+            </div>
+            <div class="action-sheet__item" data-action="close-sheet">
+              <i class="fa-solid fa-xmark"></i>
+              ${t('action.cancel')}
+            </div>
+          </div>`, { onClick });
+        return;
+      }
+      if (action === 'delete-routine') {
+        await this._deleteRoutine(rid);
+        return;
+      }
+      if (action === 'close-sheet') {
+        closeModal();
+        return;
+      }
+    };
+
+    openModal(`
       <div class="action-sheet">
         <div class="action-sheet__title">${escapeHtml(routine.name)}</div>
         <div class="action-sheet__item" data-action="edit-routine" data-id="${id}">
@@ -650,50 +680,7 @@ export default class EntrainementPage {
           <i class="fa-solid fa-trash"></i>
           ${t('workout.delete_routine')}
         </div>
-      </div>`;
-    overlay.classList.remove('hidden');
-
-    overlay.onclick = async (e) => {
-      if (e.target === overlay) { this._closeModal(); return; }
-      const target = e.target.closest('[data-action]');
-      if (!target) return;
-      const action = target.dataset.action;
-      const rid = target.dataset.id;
-
-      if (action === 'edit-routine') {
-        this._closeModal();
-        this._showEdit(this._routines.find(r => r.id === rid));
-        return;
-      }
-      if (action === 'duplicate-routine') {
-        await this._duplicateRoutine(rid);
-        return;
-      }
-      if (action === 'confirm-delete-routine') {
-        overlay.innerHTML = `
-          <div class="action-sheet">
-            <div class="action-sheet__title">${t('workout.delete_confirm')}</div>
-            <p style="padding:var(--space-3) var(--space-4);color:var(--text-secondary);font-size:var(--text-sm);">${t('workout.delete_confirm_sub')}</p>
-            <div class="action-sheet__item action-sheet__item--danger" data-action="delete-routine" data-id="${rid}">
-              <i class="fa-solid fa-trash"></i>
-              ${t('action.delete')}
-            </div>
-            <div class="action-sheet__item" data-action="close-sheet">
-              <i class="fa-solid fa-xmark"></i>
-              ${t('action.cancel')}
-            </div>
-          </div>`;
-        return;
-      }
-      if (action === 'delete-routine') {
-        await this._deleteRoutine(rid);
-        return;
-      }
-      if (action === 'close-sheet') {
-        this._closeModal();
-        return;
-      }
-    };
+      </div>`, { onClick });
   }
 
   // -------------------------------------------------------------------------
@@ -748,7 +735,7 @@ export default class EntrainementPage {
   async _deleteRoutine(id) {
     await dbDelete('routines', id);
     this._routines = this._routines.filter(r => r.id !== id);
-    this._closeModal();
+    closeModal();
     if (this._view === 'detail' && this._selectedRoutine?.id === id) {
       this._showList();
     } else {
@@ -769,18 +756,8 @@ export default class EntrainementPage {
     };
     await dbPutRoutine(copy);
     this._routines.unshift(copy);
-    this._closeModal();
+    closeModal();
     this._renderList();
-  }
-
-  _closeModal() {
-    const overlay = document.getElementById('modal-overlay');
-    if (overlay) {
-      overlay.classList.add('hidden');
-      overlay.innerHTML = '';
-      overlay.onclick = null;
-      overlay.oninput = null;
-    }
   }
 
   _getExercise(id) {
@@ -792,11 +769,7 @@ export default class EntrainementPage {
   // -------------------------------------------------------------------------
 
   _bindGlobalListeners() {
-    // ESC closes any open modal
-    this._handlers.docKeydown = (e) => {
-      if (e.key === 'Escape') this._closeModal();
-    };
-    document.addEventListener('keydown', this._handlers.docKeydown);
+    // ESC : la fermeture des modales est gérée par le composant modal
 
     // Delegated click handler on the page container
     this._page.addEventListener('click', e => this._onPageClick(e));

@@ -12,6 +12,7 @@ import {
   dbDelete,
   dbGetByIndex,
 } from '../db.js';
+import { openModal, closeModal } from '../components/modal.js';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -125,7 +126,7 @@ export default class ExercicesPage {
     }
     this._handlers = {};
     // Fermer toute modale ouverte
-    this._closeModal();
+    closeModal();
     // Nettoyer le timer de long press
     clearTimeout(this._longPressTimer);
     this._longPressTimer = null;
@@ -325,10 +326,9 @@ export default class ExercicesPage {
     };
     document.addEventListener('click', this._handlers.docClick);
 
-    // Touche Echap
+    // Touche Echap (la fermeture des modales est gérée par le composant modal)
     this._handlers.docKeydown = (e) => {
       if (e.key === 'Escape') {
-        this._closeModal();
         if (this._searchOpen) this._closeSearch();
       }
     };
@@ -473,27 +473,23 @@ export default class ExercicesPage {
           : ''}
       </div>`).join('');
 
-    const overlay = document.getElementById('modal-overlay');
-    overlay.innerHTML = `
+    openModal(`
       <div class="modal picker-modal">
         <div class="modal__handle"></div>
         <div class="modal__title">${t('exercises.muscle_group')}</div>
         <div class="picker-modal__options">
           ${options}
         </div>
-      </div>`;
-    overlay.classList.remove('hidden');
-
-    overlay.onclick = (e) => {
-      const opt = e.target.closest('[data-action="pick-filter"]');
-      if (opt) {
-        this._filterMuscle = opt.dataset.value;
-        this._closeModal();
-        this._renderList();
-        return;
-      }
-      if (e.target === overlay) this._closeModal();
-    };
+      </div>`, {
+      onClick: (e) => {
+        const opt = e.target.closest('[data-action="pick-filter"]');
+        if (opt) {
+          this._filterMuscle = opt.dataset.value;
+          closeModal();
+          this._renderList();
+        }
+      },
+    });
   }
 
   // ── Picker tri ───────────────────────────────────────────────────────────────
@@ -515,27 +511,23 @@ export default class ExercicesPage {
           : ''}
       </div>`).join('');
 
-    const overlay = document.getElementById('modal-overlay');
-    overlay.innerHTML = `
+    openModal(`
       <div class="modal picker-modal">
         <div class="modal__handle"></div>
         <div class="modal__title">${t('action.sort')}</div>
         <div class="picker-modal__options">
           ${options}
         </div>
-      </div>`;
-    overlay.classList.remove('hidden');
-
-    overlay.onclick = (e) => {
-      const opt = e.target.closest('[data-action="pick-sort"]');
-      if (opt) {
-        this._sortMode = opt.dataset.value;
-        this._closeModal();
-        this._renderList();
-        return;
-      }
-      if (e.target === overlay) this._closeModal();
-    };
+      </div>`, {
+      onClick: (e) => {
+        const opt = e.target.closest('[data-action="pick-sort"]');
+        if (opt) {
+          this._sortMode = opt.dataset.value;
+          closeModal();
+          this._renderList();
+        }
+      },
+    });
   }
 
   // ── Formulaire de création ────────────────────────────────────────────────────
@@ -547,12 +539,11 @@ export default class ExercicesPage {
     let formMuscle   = '';
 
     const renderForm = () => {
-      const overlay = document.getElementById('modal-overlay');
       const catLabel    = t(`cat.${formCategory}`);
       const muscleLabel = formMuscle ? t(`muscle.${formMuscle}`) : t('muscle.none');
       const saveDisabled = !formName.trim() ? 'disabled' : '';
 
-      overlay.innerHTML = `
+      const { el } = openModal(`
         <div class="modal exercise-form" id="ex-create-modal">
           <div class="exercise-form__header">
             <button class="btn btn--ghost" data-action="form-cancel">
@@ -593,58 +584,50 @@ export default class ExercicesPage {
               </button>
             </div>
           </div>
-        </div>`;
+        </div>`, {
+        // Clic sur le fond → fermeture (dismissible par défaut)
+        onClick: async (e) => {
+          const btn = e.target.closest('[data-action]');
+          if (!btn) return;
 
-      overlay.classList.remove('hidden');
-      overlay.onclick = null;
+          switch (btn.dataset.action) {
+            case 'form-cancel':
+              closeModal();
+              break;
 
-      // Focus sur le champ nom
-      const nameInput = document.getElementById('ex-form-name');
-      if (nameInput) {
-        nameInput.focus();
-        nameInput.addEventListener('input', (e) => {
+            case 'form-save':
+              if (!formName.trim()) return;
+              await this._saveExercise({ name: formName.trim(), category: formCategory, muscleGroup: formMuscle });
+              break;
+
+            case 'form-pick-category':
+              this._openCategoryPicker(
+                formCategory,
+                (val) => { formCategory = val; renderForm(); }
+              );
+              break;
+
+            case 'form-pick-muscle':
+              this._openMusclePicker(
+                formMuscle,
+                (val) => { formMuscle = val; renderForm(); }
+              );
+              break;
+          }
+        },
+        onInput: (e) => {
+          if (e.target.id !== 'ex-form-name') return;
           formName = e.target.value;
-          const saveBtn = overlay.querySelector('[data-action="form-save"]');
+          const saveBtn = el.querySelector('[data-action="form-save"]');
           if (saveBtn) saveBtn.disabled = !formName.trim();
           // Masquer l'erreur dès que le nom change
           const errorEl = document.getElementById('ex-form-error');
           if (errorEl) errorEl.classList.add('hidden');
-        });
-      }
+        },
+      });
 
-      overlay.onclick = async (e) => {
-        const btn = e.target.closest('[data-action]');
-        if (!btn) {
-          // Clic sur le fond ferme la modale seulement hors du modal lui-même
-          if (e.target === overlay) this._closeModal();
-          return;
-        }
-
-        switch (btn.dataset.action) {
-          case 'form-cancel':
-            this._closeModal();
-            break;
-
-          case 'form-save':
-            if (!formName.trim()) return;
-            await this._saveExercise({ name: formName.trim(), category: formCategory, muscleGroup: formMuscle });
-            break;
-
-          case 'form-pick-category':
-            this._openCategoryPicker(
-              formCategory,
-              (val) => { formCategory = val; renderForm(); }
-            );
-            break;
-
-          case 'form-pick-muscle':
-            this._openMusclePicker(
-              formMuscle,
-              (val) => { formMuscle = val; renderForm(); }
-            );
-            break;
-        }
-      };
+      // Focus sur le champ nom
+      el.querySelector('#ex-form-name')?.focus();
     };
 
     renderForm();
@@ -663,25 +646,21 @@ export default class ExercicesPage {
           : ''}
       </div>`).join('');
 
-    const overlay = document.getElementById('modal-overlay');
-    overlay.innerHTML = `
+    openModal(`
       <div class="modal picker-modal">
         <div class="modal__handle"></div>
         <div class="modal__title">${t('exercises.category')}</div>
         <div class="picker-modal__options">
           ${options}
         </div>
-      </div>`;
-    overlay.classList.remove('hidden');
-
-    overlay.onclick = (e) => {
-      const opt = e.target.closest('[data-action="pick-cat"]');
-      if (opt) {
-        onSelect(opt.dataset.value);
-        return;
-      }
-      if (e.target === overlay) onSelect(currentValue); // annuler = garder la valeur
-    };
+      </div>`, {
+      // annuler = garder la valeur et revenir au formulaire
+      onBackdrop: () => onSelect(currentValue),
+      onClick: (e) => {
+        const opt = e.target.closest('[data-action="pick-cat"]');
+        if (opt) onSelect(opt.dataset.value);
+      },
+    });
   }
 
   // ── Picker groupe musculaire (depuis formulaire) ──────────────────────────────
@@ -698,25 +677,21 @@ export default class ExercicesPage {
           : ''}
       </div>`).join('');
 
-    const overlay = document.getElementById('modal-overlay');
-    overlay.innerHTML = `
+    openModal(`
       <div class="modal picker-modal">
         <div class="modal__handle"></div>
         <div class="modal__title">${t('exercises.muscle_group')}</div>
         <div class="picker-modal__options">
           ${options}
         </div>
-      </div>`;
-    overlay.classList.remove('hidden');
-
-    overlay.onclick = (e) => {
-      const opt = e.target.closest('[data-action="pick-muscle-form"]');
-      if (opt) {
-        onSelect(opt.dataset.value);
-        return;
-      }
-      if (e.target === overlay) onSelect(currentValue);
-    };
+      </div>`, {
+      // annuler = garder la valeur et revenir au formulaire
+      onBackdrop: () => onSelect(currentValue),
+      onClick: (e) => {
+        const opt = e.target.closest('[data-action="pick-muscle-form"]');
+        if (opt) onSelect(opt.dataset.value);
+      },
+    });
   }
 
   // ── Sauvegarde d'un exercice ──────────────────────────────────────────────────
@@ -735,7 +710,7 @@ export default class ExercicesPage {
 
     try {
       await dbPutExercise(newExercise);
-      this._closeModal();
+      closeModal();
       await this._loadAndRender();
 
       // Scroller vers l'exercice créé
@@ -766,7 +741,7 @@ export default class ExercicesPage {
     const ex = this._exercises.find(e => e.id === id);
     if (!ex) return;
     await dbPutExercise({ ...ex, isArchived: archive });
-    this._closeModal();
+    closeModal();
     await this._loadAndRender();
   }
 
@@ -774,7 +749,7 @@ export default class ExercicesPage {
     const ex = this._exercises.find(e => e.id === id);
     if (!ex || !ex.isCustom) return;
     await dbDelete('exercises', id);
-    this._closeModal();
+    closeModal();
     await this._loadAndRender();
   }
 
@@ -805,8 +780,7 @@ export default class ExercicesPage {
     const isArchived = ex.isArchived === true;
     const isCustom   = ex.isCustom === true;
 
-    const overlay = document.getElementById('modal-overlay');
-    overlay.innerHTML = `
+    openModal(`
       <div class="modal">
         <div class="modal__handle"></div>
         <div class="modal__title">${escapeHtml(ex.name)}</div>
@@ -829,40 +803,26 @@ export default class ExercicesPage {
             ${t('action.cancel')}
           </button>
         </div>
-      </div>`;
-    overlay.classList.remove('hidden');
+      </div>`, {
+      onClick: async (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
 
-    overlay.onclick = async (e) => {
-      const btn = e.target.closest('[data-action]');
-      if (!btn) {
-        if (e.target === overlay) this._closeModal();
-        return;
-      }
-
-      switch (btn.dataset.action) {
-        case 'archive-exercise':
-          await this._archiveExercise(btn.dataset.id, true);
-          break;
-        case 'restore-exercise':
-          await this._archiveExercise(btn.dataset.id, false);
-          break;
-        case 'delete-exercise':
-          await this._deleteExercise(btn.dataset.id);
-          break;
-        case 'close-modal':
-          this._closeModal();
-          break;
-      }
-    };
-  }
-
-  // ── Fermeture modale ──────────────────────────────────────────────────────────
-
-  _closeModal() {
-    const overlay = document.getElementById('modal-overlay');
-    if (!overlay) return;
-    overlay.classList.add('hidden');
-    overlay.innerHTML = '';
-    overlay.onclick   = null;
+        switch (btn.dataset.action) {
+          case 'archive-exercise':
+            await this._archiveExercise(btn.dataset.id, true);
+            break;
+          case 'restore-exercise':
+            await this._archiveExercise(btn.dataset.id, false);
+            break;
+          case 'delete-exercise':
+            await this._deleteExercise(btn.dataset.id);
+            break;
+          case 'close-modal':
+            closeModal();
+            break;
+        }
+      },
+    });
   }
 }

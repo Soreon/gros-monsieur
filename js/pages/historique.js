@@ -5,6 +5,7 @@
 import { t } from '../i18n.js';
 import { dbGetAllSessions, dbDelete } from '../db.js';
 import { getState } from '../store.js';
+import { openModal, closeModal } from '../components/modal.js';
 import {
   formatDuration,
   formatDate,
@@ -564,10 +565,7 @@ export default class HistoriquePage {
   // ---------------------------------------------------------------------------
 
   _showDeleteModal(sessionId) {
-    const overlay = document.getElementById('modal-overlay');
-    if (!overlay) return;
-
-    overlay.innerHTML = `
+    openModal(`
       <div class="modal" role="dialog" aria-modal="true"
            aria-labelledby="hist-modal-title">
         <div class="modal__header">
@@ -587,35 +585,24 @@ export default class HistoriquePage {
             ${t('action.delete')}
           </button>
         </div>
-      </div>`;
+      </div>`, {
+      // Backdrop → fermeture (dismissible par défaut)
+      onClick: async (e) => {
+        if (e.target.closest('#hist-modal-cancel')) {
+          closeModal();
+          return;
+        }
+        if (e.target.closest('#hist-modal-delete')) {
+          await dbDelete('sessions', sessionId);
+          closeModal();
 
-    overlay.classList.remove('hidden');
-
-    const closeModal = () => {
-      overlay.classList.add('hidden');
-      overlay.innerHTML = '';
-      overlay.onclick   = null;
-    };
-
-    const cancelBtn = overlay.querySelector('#hist-modal-cancel');
-    const deleteBtn = overlay.querySelector('#hist-modal-delete');
-
-    cancelBtn.addEventListener('click', closeModal);
-
-    deleteBtn.addEventListener('click', async () => {
-      await dbDelete('sessions', sessionId);
-      closeModal();
-
-      // Reload and return to list
-      await this._loadSessions();
-      this._view            = 'list';
-      this._selectedSession = null;
-      this._render();
+          // Reload and return to list
+          await this._loadSessions();
+          this._view            = 'list';
+          this._selectedSession = null;
+          this._render();
+        }
+      },
     });
-
-    // Close on backdrop click (overwritten on each open, cleared in closeModal)
-    overlay.onclick = e => {
-      if (e.target === overlay) closeModal();
-    };
   }
 }

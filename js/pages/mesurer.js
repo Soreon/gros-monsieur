@@ -10,6 +10,7 @@ import {
   dbPutMeasurement,
   dbDelete,
 } from '../db.js';
+import { openModal, closeModal } from '../components/modal.js';
 
 // ---------------------------------------------------------------------------
 // Local helper
@@ -481,13 +482,10 @@ export default class MesurerPage {
     const typeDef = this._typeDef(typeKey);
     if (!typeDef) return;
 
-    const overlay = document.getElementById('modal-overlay');
-    if (!overlay) return;
-
     const typeName  = t('mtype.' + typeKey);
     const todayStr  = new Date().toISOString().slice(0, 10);
 
-    overlay.innerHTML = `
+    const { el } = openModal(`
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="measure-modal-title">
         <div class="modal__header">
           <h2 class="modal__title" id="measure-modal-title">
@@ -531,63 +529,54 @@ export default class MesurerPage {
             ${t('action.save')}
           </button>
         </div>
-      </div>`;
-
-    overlay.classList.remove('hidden');
-
-    // Focus value input immediately
-    const valueInput = overlay.querySelector('#measure-value-input');
-    if (valueInput) setTimeout(() => valueInput.focus(), 50);
-
-    const closeModal = () => {
-      overlay.classList.add('hidden');
-      overlay.innerHTML = '';
-    };
-
-    const cancelBtn = overlay.querySelector('#measure-modal-cancel');
-    const saveBtn   = overlay.querySelector('#measure-modal-save');
-    const errorEl   = overlay.querySelector('#measure-modal-error');
-    const dateInput = overlay.querySelector('#measure-date-input');
-
-    cancelBtn.addEventListener('click', closeModal);
-
-    saveBtn.addEventListener('click', async () => {
-      const rawValue = valueInput ? valueInput.value.trim() : '';
-      const rawDate  = dateInput  ? dateInput.value  : '';
-      const parsed   = parseFloat(rawValue);
-
-      if (!rawValue || isNaN(parsed) || parsed <= 0) {
-        if (errorEl) {
-          errorEl.textContent = t('measure.add_entry');
-          errorEl.style.display = 'block';
+      </div>`, {
+      // Backdrop → fermeture (dismissible par défaut)
+      onClick: async (e) => {
+        if (e.target.closest('#measure-modal-cancel')) {
+          closeModal();
+          return;
         }
-        if (valueInput) valueInput.focus();
-        return;
-      }
+        if (!e.target.closest('#measure-modal-save')) return;
 
-      const dateTs = rawDate
-        ? new Date(rawDate).getTime()
-        : Date.now();
+        const valueInput = el.querySelector('#measure-value-input');
+        const dateInput  = el.querySelector('#measure-date-input');
+        const errorEl    = el.querySelector('#measure-modal-error');
+        const rawValue   = valueInput ? valueInput.value.trim() : '';
+        const rawDate    = dateInput  ? dateInput.value  : '';
+        const parsed     = parseFloat(rawValue);
 
-      const obj = {
-        id:        uid(),
-        type:      typeKey,
-        value:     parsed,
-        unit:      typeDef.unit,
-        date:      dateTs,
-        createdAt: Date.now(),
-      };
+        if (!rawValue || isNaN(parsed) || parsed <= 0) {
+          if (errorEl) {
+            errorEl.textContent = t('measure.add_entry');
+            errorEl.style.display = 'block';
+          }
+          if (valueInput) valueInput.focus();
+          return;
+        }
 
-      await dbPutMeasurement(obj);
-      await this._loadMeasurements();
-      closeModal();
-      this._render();
+        const dateTs = rawDate
+          ? new Date(rawDate).getTime()
+          : Date.now();
+
+        const obj = {
+          id:        uid(),
+          type:      typeKey,
+          value:     parsed,
+          unit:      typeDef.unit,
+          date:      dateTs,
+          createdAt: Date.now(),
+        };
+
+        await dbPutMeasurement(obj);
+        await this._loadMeasurements();
+        closeModal();
+        this._render();
+      },
     });
 
-    // Close on backdrop click
-    overlay.addEventListener('click', e => {
-      if (e.target === overlay) closeModal();
-    }, { once: true });
+    // Focus value input immediately
+    const valueInput = el.querySelector('#measure-value-input');
+    if (valueInput) setTimeout(() => valueInput.focus(), 50);
   }
 
   // ---------------------------------------------------------------------------
@@ -595,10 +584,7 @@ export default class MesurerPage {
   // ---------------------------------------------------------------------------
 
   _showDeleteModal(entryId) {
-    const overlay = document.getElementById('modal-overlay');
-    if (!overlay) return;
-
-    overlay.innerHTML = `
+    openModal(`
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="measure-del-title">
         <div class="modal__header">
           <h2 class="modal__title" id="measure-del-title">
@@ -614,29 +600,20 @@ export default class MesurerPage {
             ${t('action.delete')}
           </button>
         </div>
-      </div>`;
-
-    overlay.classList.remove('hidden');
-
-    const closeModal = () => {
-      overlay.classList.add('hidden');
-      overlay.innerHTML = '';
-    };
-
-    const cancelBtn  = overlay.querySelector('#measure-del-cancel');
-    const confirmBtn = overlay.querySelector('#measure-del-confirm');
-
-    cancelBtn.addEventListener('click', closeModal);
-
-    confirmBtn.addEventListener('click', async () => {
-      await dbDelete('measurements', entryId);
-      closeModal();
-      await this._loadMeasurements();
-      this._render();
+      </div>`, {
+      // Backdrop → fermeture (dismissible par défaut)
+      onClick: async (e) => {
+        if (e.target.closest('#measure-del-cancel')) {
+          closeModal();
+          return;
+        }
+        if (e.target.closest('#measure-del-confirm')) {
+          await dbDelete('measurements', entryId);
+          closeModal();
+          await this._loadMeasurements();
+          this._render();
+        }
+      },
     });
-
-    overlay.addEventListener('click', e => {
-      if (e.target === overlay) closeModal();
-    }, { once: true });
   }
 }

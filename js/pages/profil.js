@@ -26,6 +26,7 @@ import {
 } from '../db.js';
 import { setTheme } from '../app.js';
 import { exportData, importData } from '../utils/export.js';
+import { openModal, closeModal } from '../components/modal.js';
 
 // =============================================================================
 // Local helpers
@@ -193,11 +194,8 @@ export default class ProfilPage {
     this._handlers = {};
 
     // Clean up the widget picker if it's still open
-    const overlay = document.getElementById('modal-overlay');
-    if (overlay && overlay.querySelector('#picker-modal-title')) {
-      overlay.onclick = null;
-      overlay.classList.add('hidden');
-      overlay.innerHTML = '';
+    if (document.getElementById('picker-modal-title')) {
+      closeModal();
     }
   }
 
@@ -595,9 +593,6 @@ export default class ProfilPage {
   // ---------------------------------------------------------------------------
 
   _openWidgetPicker() {
-    const overlay = document.getElementById('modal-overlay');
-    if (!overlay) return;
-
     const itemsHtml = WIDGET_CATALOG.map(def => `
       <button class="widget-picker__item" data-widget-def-id="${escapeHtml(def.id)}">
         <span class="widget-picker__item-icon"><i class="${escapeHtml(def.icon)}"></i></span>
@@ -607,7 +602,11 @@ export default class ProfilPage {
         </div>
       </button>`).join('');
 
-    overlay.innerHTML = `
+    // Handler réassignable : l'étape de config remplace la logique de clic
+    // sans rouvrir la modale (le contenu est mis à jour en place).
+    let onStepClick;
+
+    const { el } = openModal(`
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="picker-modal-title">
         <div class="modal__header">
           <h2 class="modal__title" id="picker-modal-title">${t('profile.add_widget')}</h2>
@@ -620,21 +619,13 @@ export default class ProfilPage {
             ${itemsHtml}
           </div>
         </div>
-      </div>`;
+      </div>`, {
+      // Backdrop → fermeture (dismissible par défaut)
+      onClick: (e) => onStepClick(e),
+    });
 
-    overlay.classList.remove('hidden');
-
-    const closeModal = () => {
-      overlay.classList.add('hidden');
-      overlay.innerHTML = '';
-      overlay.onclick   = null;
-    };
-
-    // overlay.onclick (not addEventListener): the #modal-overlay element is
-    // persistent, so a new handler must replace the previous one — same
-    // pattern as the other pages' modals.
-    overlay.onclick = async (e) => {
-      if (e.target === overlay || e.target.closest('[data-action="close-modal"]')) {
+    onStepClick = async (e) => {
+      if (e.target.closest('[data-action="close-modal"]')) {
         closeModal();
         return;
       }
@@ -647,7 +638,7 @@ export default class ProfilPage {
       if (!def) return;
 
       if (def.needsConfig) {
-        this._renderWidgetConfigStep(overlay, def, closeModal);
+        onStepClick = this._renderWidgetConfigStep(el, def);
       } else {
         closeModal();
         await this._addWidget(defId, {});
@@ -659,7 +650,15 @@ export default class ProfilPage {
   // Widget config step (inside the modal after picking a widget)
   // ---------------------------------------------------------------------------
 
-  _renderWidgetConfigStep(overlay, def, closeModal) {
+  /**
+   * Étape de configuration (choix d'exercice ou de type de mesure) affichée
+   * dans la modale déjà ouverte : met à jour le contenu en place et retourne
+   * le nouveau handler de clic à utiliser.
+   * @param {HTMLElement} el - Élément retourné par openModal (conteneur de la modale)
+   * @param {object} def - Définition du widget (WIDGET_CATALOG)
+   * @returns {Function} Handler de clic de l'étape config
+   */
+  _renderWidgetConfigStep(el, def) {
     let listHtml = '';
 
     if (def.configType === 'exercise') {
@@ -686,17 +685,17 @@ export default class ProfilPage {
         </button>`).join('');
     }
 
-    overlay.querySelector('.modal__body').innerHTML = `
+    el.querySelector('.modal__body').innerHTML = `
       <div class="widget-picker__list">
         ${listHtml}
       </div>`;
 
     // Update header to reflect the sub-step
-    overlay.querySelector('.modal__title').textContent = t(def.titleKey);
+    el.querySelector('.modal__title').textContent = t(def.titleKey);
 
-    // Replace the picker handler with the config-step handler
-    overlay.onclick = async (e) => {
-      if (e.target === overlay || e.target.closest('[data-action="close-modal"]')) {
+    // Handler de clic de l'étape config (le backdrop reste géré par le composant)
+    return async (e) => {
+      if (e.target.closest('[data-action="close-modal"]')) {
         closeModal();
         return;
       }
