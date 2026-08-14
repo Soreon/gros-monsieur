@@ -112,12 +112,36 @@ const WIDGET_CATALOG = [
   },
 ];
 
-// Known measurement types (extend as needed)
+// Known measurement types — must match the keys recorded by mesurer.js
+// (GENERAL_TYPES + BODY_TYPES). Labels come from the 'mtype.*' locale keys.
 const MEASURE_TYPES = [
-  'poids', 'tour_de_taille', 'tour_de_poitrine', 'tour_de_bras',
-  'tour_de_cuisses', 'tour_de_mollets', 'tour_de_hanches',
-  'masse_grasse', 'masse_musculaire', 'calories',
+  'weight', 'body_fat', 'calories',
+  'neck', 'shoulders', 'chest',
+  'bicep_left', 'bicep_right',
+  'forearm_left', 'forearm_right',
+  'waist', 'hips',
+  'thigh_left', 'thigh_right',
+  'calf_left', 'calf_right',
 ];
+
+// Migration of legacy widget configs (old French slugs → mesurer.js keys).
+// Ambiguous slugs (tour_de_bras, tour_de_cuisses, tour_de_mollets,
+// masse_musculaire) are left as-is: they never had recorded data and
+// display a clean "no data" state.
+const LEGACY_MEASURE_TYPE_MAP = {
+  poids:            'weight',
+  masse_grasse:     'body_fat',
+  tour_de_taille:   'waist',
+  tour_de_poitrine: 'chest',
+  tour_de_hanches:  'hips',
+};
+
+/** Human label for a measure type: 'mtype.*' locale key, or raw slug fallback. */
+function measureTypeLabel(type) {
+  const key   = 'mtype.' + type;
+  const label = t(key);
+  return label === key ? type : label;
+}
 
 // =============================================================================
 // ProfilPage
@@ -137,7 +161,8 @@ export default class ProfilPage {
     // Settings sub-view
     this._settingsEditingProfile = false;
 
-    // Document-level listeners removed in destroy()
+    // Container-level delegated listeners, bound once per instance
+    // (in _bindEvents) and removed in destroy()
     this._handlers = {};
   }
 
@@ -162,14 +187,45 @@ export default class ProfilPage {
     if (!this._profile.settings) this._profile.settings = _defaultProfile().settings;
     if (!Array.isArray(this._profile.dashboardWidgets)) this._profile.dashboardWidgets = [];
 
+    this._bindEvents();
     this._render();
   }
 
   destroy() {
     for (const [event, handler] of Object.entries(this._handlers)) {
-      document.removeEventListener(event, handler);
+      this.container.removeEventListener(event, handler);
     }
     this._handlers = {};
+
+    // Clean up the widget picker if it's still open
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay && overlay.querySelector('#picker-modal-title')) {
+      overlay.onclick = null;
+      overlay.classList.add('hidden');
+      overlay.innerHTML = '';
+    }
+  }
+
+  // ===========================================================================
+  // Event binding (once per instance — delegated on the container)
+  // ===========================================================================
+
+  _bindEvents() {
+    if (this._handlers.click) return; // already bound
+
+    this._handlers.click = (e) => {
+      if (this._view === 'settings') {
+        this._handleSettingsClick(e);
+      } else {
+        this._handleDashboardClick(e);
+      }
+    };
+    this._handlers.change = (e) => {
+      if (this._view === 'settings') this._handleSettingsChange(e);
+    };
+
+    this.container.addEventListener('click',  this._handlers.click);
+    this.container.addEventListener('change', this._handlers.change);
   }
 
   // ===========================================================================
@@ -248,8 +304,6 @@ export default class ProfilPage {
         </div>
 
       </div>`;
-
-    this._bindDashboardEvents();
   }
 
   // ---------------------------------------------------------------------------
@@ -258,11 +312,11 @@ export default class ProfilPage {
 
   _renderWidgets() {
     return this._profile.dashboardWidgets
-      .map(widget => this._renderWidget(widget))
+      .map((widget, index) => this._renderWidget(widget, index))
       .join('');
   }
 
-  _renderWidget(widget) {
+  _renderWidget(widget, index) {
     const def = WIDGET_CATALOG.find(d => d.id === widget.id);
     if (!def) return '';
 
@@ -277,7 +331,7 @@ export default class ProfilPage {
           <span class="widget-card__title">${escapeHtml(title)}</span>
           <button class="widget-card__remove icon-btn"
                   data-action="remove-widget"
-                  data-widget-id="${escapeHtml(widget.id)}"
+                  data-widget-index="${index}"
                   aria-label="${t('action.close')}">
             <i class="fa-solid fa-xmark"></i>
           </button>
@@ -426,13 +480,17 @@ export default class ProfilPage {
   // ── measure ────────────────────────────────────────────────────────────────
 
   _bodyMeasure(config) {
-    const measureType = config?.measureType;
-    if (!measureType) {
+    const rawType = config?.measureType;
+    if (!rawType) {
       return `
         <div class="widget-stat">
           <span class="widget-stat__label">${t('widget.no_data')}</span>
         </div>`;
     }
+
+    // Migrate legacy slugs (old widget configs) to mesurer.js keys
+    const measureType = LEGACY_MEASURE_TYPE_MAP[rawType] || rawType;
+    const label       = measureTypeLabel(measureType);
 
     const latest = this._measurements
       .filter(m => m.type === measureType)
@@ -441,7 +499,7 @@ export default class ProfilPage {
     if (!latest) {
       return `
         <div class="widget-stat">
-          <span class="widget-stat__label">${escapeHtml(measureType)}</span>
+          <span class="widget-stat__label">${escapeHtml(label)}</span>
           <span class="widget-stat__sub">${t('widget.no_data')}</span>
         </div>`;
     }
@@ -450,47 +508,45 @@ export default class ProfilPage {
       <div class="widget-stat">
         <span class="widget-stat__value">${escapeHtml(String(latest.value))}</span>
         <span class="widget-stat__unit">${escapeHtml(latest.unit || '')}</span>
-        <span class="widget-stat__label">${escapeHtml(measureType)}</span>
+        <span class="widget-stat__label">${escapeHtml(label)}</span>
       </div>`;
   }
 
   // ---------------------------------------------------------------------------
-  // Dashboard event binding
+  // Dashboard events (delegated — bound once in _bindEvents)
   // ---------------------------------------------------------------------------
 
-  _bindDashboardEvents() {
-    this.container.addEventListener('click', this._onDashboardClick = (e) => {
-      // Settings button
-      if (e.target.closest('[data-action="open-settings"]')) {
-        this._view = 'settings';
-        this._settingsEditingProfile = false;
-        this._render();
-        return;
-      }
+  _handleDashboardClick(e) {
+    // Settings button
+    if (e.target.closest('[data-action="open-settings"]')) {
+      this._view = 'settings';
+      this._settingsEditingProfile = false;
+      this._render();
+      return;
+    }
 
-      // Add widget
-      if (e.target.closest('[data-action="add-widget"]')) {
-        this._openWidgetPicker();
-        return;
-      }
+    // Add widget
+    if (e.target.closest('[data-action="add-widget"]')) {
+      this._openWidgetPicker();
+      return;
+    }
 
-      // Remove widget
-      const removeBtn = e.target.closest('[data-action="remove-widget"]');
-      if (removeBtn) {
-        const widgetId = removeBtn.dataset.widgetId;
-        this._removeWidget(widgetId);
-        return;
-      }
-    });
+    // Remove widget (by instance index, not by type id)
+    const removeBtn = e.target.closest('[data-action="remove-widget"]');
+    if (removeBtn) {
+      const index = Number(removeBtn.dataset.widgetIndex);
+      if (Number.isInteger(index)) this._removeWidget(index);
+      return;
+    }
   }
 
   // ---------------------------------------------------------------------------
   // Widget management
   // ---------------------------------------------------------------------------
 
-  async _removeWidget(widgetId) {
-    this._profile.dashboardWidgets = this._profile.dashboardWidgets
-      .filter(w => w.id !== widgetId);
+  async _removeWidget(index) {
+    if (index < 0 || index >= this._profile.dashboardWidgets.length) return;
+    this._profile.dashboardWidgets.splice(index, 1);
     await dbSaveProfile(this._profile).catch(console.error);
     this._renderDashboard();
   }
@@ -538,9 +594,13 @@ export default class ProfilPage {
     const closeModal = () => {
       overlay.classList.add('hidden');
       overlay.innerHTML = '';
+      overlay.onclick   = null;
     };
 
-    overlay.addEventListener('click', async (e) => {
+    // overlay.onclick (not addEventListener): the #modal-overlay element is
+    // persistent, so a new handler must replace the previous one — same
+    // pattern as the other pages' modals.
+    overlay.onclick = async (e) => {
       if (e.target === overlay || e.target.closest('[data-action="close-modal"]')) {
         closeModal();
         return;
@@ -559,7 +619,7 @@ export default class ProfilPage {
         closeModal();
         await this._addWidget(defId, {});
       }
-    });
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -584,11 +644,12 @@ export default class ProfilPage {
     } else if (def.configType === 'measureType') {
       // Build list from known types + any used in measurements
       const usedTypes = [...new Set(this._measurements.map(m => m.type))];
-      const allTypes  = [...new Set([...MEASURE_TYPES, ...usedTypes])].sort();
+      const allTypes  = [...new Set([...MEASURE_TYPES, ...usedTypes])]
+        .sort((a, b) => measureTypeLabel(a).localeCompare(measureTypeLabel(b)));
 
       listHtml = allTypes.map(type => `
         <button class="widget-picker__item" data-config-value="${escapeHtml(type)}">
-          ${escapeHtml(type)}
+          ${escapeHtml(measureTypeLabel(type))}
         </button>`).join('');
     }
 
@@ -600,12 +661,13 @@ export default class ProfilPage {
     // Update header to reflect the sub-step
     overlay.querySelector('.modal__title').textContent = t(def.titleKey);
 
-    // Remove old listeners via clone trick
-    const body = overlay.querySelector('.modal__body');
-    const freshBody = body.cloneNode(true);
-    body.parentNode.replaceChild(freshBody, body);
+    // Replace the picker handler with the config-step handler
+    overlay.onclick = async (e) => {
+      if (e.target === overlay || e.target.closest('[data-action="close-modal"]')) {
+        closeModal();
+        return;
+      }
 
-    freshBody.addEventListener('click', async (e) => {
       const item = e.target.closest('.widget-picker__item');
       if (!item) return;
 
@@ -617,7 +679,7 @@ export default class ProfilPage {
         : { measureType: value };
 
       await this._addWidget(def.id, config);
-    });
+    };
   }
 
   // ===========================================================================
@@ -744,8 +806,6 @@ export default class ProfilPage {
         </section>
 
       </div>`;
-
-    this._bindSettingsEvents();
   }
 
   // ---------------------------------------------------------------------------
@@ -828,13 +888,8 @@ export default class ProfilPage {
   }
 
   // ---------------------------------------------------------------------------
-  // Settings events (all delegated)
+  // Settings events (delegated — bound once in _bindEvents)
   // ---------------------------------------------------------------------------
-
-  _bindSettingsEvents() {
-    this.container.addEventListener('click',  this._onSettingsClick  = (e) => this._handleSettingsClick(e));
-    this.container.addEventListener('change', this._onSettingsChange = (e) => this._handleSettingsChange(e));
-  }
 
   _handleSettingsClick(e) {
     // Back to dashboard
