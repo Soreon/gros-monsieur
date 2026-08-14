@@ -4,7 +4,7 @@
  * Le shell et Font Awesome Pro sont mis en cache dès l'installation.
  */
 
-const CACHE_VERSION = 'gm-v20';
+const CACHE_VERSION = 'gm-v21';
 
 // Assets à mettre en cache lors de l'installation (app shell)
 const PRECACHE_ASSETS = [
@@ -46,6 +46,7 @@ const PRECACHE_ASSETS = [
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
   './assets/icons/icon-maskable-512.png',
+  './assets/icons/icon-monochrome-512.png',
   // Font Awesome Pro (local, sous-ensemble — régénérer via tools/subset-fontawesome.mjs)
   './assets/fontawesome/css/fa-subset.min.css',
   './assets/fontawesome/webfonts/fa-solid-900.subset.woff2',
