@@ -915,6 +915,44 @@
 
 
 /* ============================================================
+   9bis. PASTILLES DE COULEUR D'ACCENT
+   ============================================================ */
+
+.accent-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.accent-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s;
+}
+
+.accent-swatch:active {
+  transform: scale(0.9);
+}
+
+/* Anneau de sélection : un liseré de fond puis un cercle couleur texte,
+   lisible sur toutes les couleurs de pastille et dans les deux thèmes. */
+.accent-swatch--active {
+  box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--text);
+}
+
+
+/* ============================================================
    10. IMPORT STRONG — modale de correspondance des exercices
    ============================================================ */
 

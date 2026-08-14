@@ -25,7 +25,7 @@ import {
   dbGetAllMeasurements,
   dbGetAllExercises,
 } from '../db.js';
-import { setTheme } from '../app.js';
+import { setTheme, applyAccent, getAccentPref, supportsSystemAccent } from '../app.js';
 import { exportData, importData } from '../utils/export.js';
 import { pickCsvFile, parseStrongCsv, suggestMatches, runImport } from '../utils/strong-import.js';
 import { openModal, closeModal } from '../components/modal.js';
@@ -764,6 +764,14 @@ export default class ProfilPage {
             </div>
           </div>
 
+          <!-- Accent color -->
+          <div class="settings-row">
+            <label class="settings-row__label">${t('settings.accent')}</label>
+            <div class="settings-row__control accent-swatches">
+              ${this._accentSwatchesHtml()}
+            </div>
+          </div>
+
           <!-- Language -->
           <div class="settings-row">
             <label class="settings-row__label">${t('settings.language')}</label>
@@ -949,7 +957,43 @@ export default class ProfilPage {
   // Settings events (delegated — bound once in _bindEvents)
   // ---------------------------------------------------------------------------
 
+  /**
+   * Pastilles de couleur d'accent : Système (couleur de l'OS via le mot-clé
+   * CSS AccentColor, masquée si non supporté), défaut, puis préréglages.
+   */
+  _accentSwatchesHtml() {
+    const current = getAccentPref();
+    const swatches = [];
+    if (supportsSystemAccent()) {
+      swatches.push({ value: 'system', label: t('settings.accent_system'), css: 'AccentColor', icon: '<i class="fa-solid fa-gear"></i>' });
+    }
+    swatches.push(
+      { value: 'default', label: t('settings.accent_default'), css: '#3decec', icon: '' },
+      { value: '#7c5cbf', label: t('settings.accent_violet'), css: '#7c5cbf', icon: '' },
+      { value: '#3fae62', label: t('settings.accent_green'),  css: '#3fae62', icon: '' },
+      { value: '#e8892e', label: t('settings.accent_orange'), css: '#e8892e', icon: '' },
+      { value: '#e05585', label: t('settings.accent_pink'),   css: '#e05585', icon: '' },
+    );
+    return swatches.map(s => `
+      <button class="accent-swatch${s.value === current ? ' accent-swatch--active' : ''}"
+              data-action="set-accent" data-accent="${s.value}"
+              title="${escapeHtml(s.label)}" aria-label="${escapeHtml(s.label)}"
+              style="background:${s.css};">${s.icon}</button>`).join('');
+  }
+
   _handleSettingsClick(e) {
+    // Accent color swatch
+    const swatch = e.target.closest('[data-action="set-accent"]');
+    if (swatch) {
+      const value = swatch.dataset.accent;
+      applyAccent(value);
+      this._profile.settings = this._profile.settings || {};
+      this._profile.settings.accentColor = value;
+      dbSaveProfile(this._profile).catch(console.error);
+      this._renderSettings();
+      return;
+    }
+
     // Back to dashboard
     if (e.target.closest('[data-action="settings-back"]')) {
       this._view = 'dashboard';
