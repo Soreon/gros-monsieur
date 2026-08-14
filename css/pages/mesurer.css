@@ -51,7 +51,7 @@
 
 .measure-tab--active {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: var(--shadow-sm);
 }
 
@@ -192,9 +192,17 @@
   flex-shrink: 0;
 }
 
+/* Zone tactile élargie à 40×40 (28px visuel + 6px de chaque côté)
+   sans modifier le rendu visuel du bouton */
+.measure-card__add-btn::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
 .measure-card__add-btn:active {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   transform: scale(0.92);
 }
 

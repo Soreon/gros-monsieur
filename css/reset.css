@@ -36,7 +36,12 @@ input, button, textarea, select {
   color: inherit;
   background: none;
   border: none;
-  outline: none;
+}
+
+/* Indicateur de focus clavier — visible sur tous les éléments interactifs */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 button {
@@ -57,4 +62,17 @@ ul, ol {
 h1, h2, h3, h4, h5, h6 {
   font-weight: var(--fw-bold);
   line-height: 1.2;
+}
+
+/* Respect de la préférence utilisateur « réduire les animations » */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
 }

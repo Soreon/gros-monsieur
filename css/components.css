@@ -30,7 +30,7 @@
 /* Primaire (accent plein) */
 .btn--primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 .btn--primary:hover { background: var(--accent-hover); }
 
@@ -79,6 +79,33 @@
 }
 .btn--icon:hover { background: var(--bg-elevated); color: var(--text); }
 
+/* Bouton icône générique (utilisé par mesurer.js, profil.js, historique.js) —
+   zone tactile 40×40, centré, sans fond */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.icon-btn:hover,
+.icon-btn:active {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
 /* ── Inputs ── */
 .input-group {
   display: flex;
@@ -100,7 +127,7 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
-  font-size: var(--text-md);
+  font-size: var(--text-base); /* ≥16px : évite le zoom auto de Safari iOS au focus */
   color: var(--text);
   transition: border-color var(--duration-fast) var(--ease);
 }
@@ -109,12 +136,11 @@
 
 .input:focus {
   border-color: var(--accent);
-  outline: none;
 }
 
 .input--sm {
   padding: var(--space-2) var(--space-3);
-  font-size: var(--text-sm);
+  font-size: var(--text-base); /* ≥16px : évite le zoom auto iOS */
 }
 
 /* Input numérique compact (kg / reps) */
@@ -122,10 +148,30 @@
   width: 72px;
   text-align: center;
   padding: var(--space-2);
+  font-size: var(--text-base); /* ≥16px : évite le zoom auto iOS */
   border-radius: var(--radius-sm);
-  font-size: var(--text-md);
   font-weight: var(--fw-medium);
   font-variant-numeric: tabular-nums;
+}
+
+/* Champ de formulaire générique (utilisé par mesurer.js, profil.js) —
+   même apparence que .input */
+.form-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-base); /* ≥16px : évite le zoom auto iOS */
+  color: var(--text);
+  box-sizing: border-box;
+  transition: border-color var(--duration-fast) var(--ease);
+}
+
+.form-input::placeholder { color: var(--text-disabled); }
+
+.form-input:focus {
+  border-color: var(--accent);
 }
 
 /* Select */
@@ -140,12 +186,13 @@
   font-size: var(--text-md);
   color: var(--text);
   cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23a0a8b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: var(--select-chevron);
   background-repeat: no-repeat;
   background-position: right 16px center;
+  background-size: 12px 8px;
 }
 
-.select:focus { border-color: var(--accent); outline: none; }
+.select:focus { border-color: var(--accent); }
 
 /* ── Toggle switch ── */
 .toggle {
@@ -340,7 +387,7 @@
   height: 48px;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   display: flex;
   align-items: center;
   justify-content: center;

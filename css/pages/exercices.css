@@ -76,7 +76,7 @@
 
 .filter-badge:active {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .filter-badge i {
@@ -184,6 +184,11 @@
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
+}
+
+/* Exercice archivé (classe posée par exercices.js) — atténué */
+.exercise-item--archived {
+  opacity: 0.5;
 }
 
 /* ── Formulaire "Nouvel exercice" (contenu modal) ── */

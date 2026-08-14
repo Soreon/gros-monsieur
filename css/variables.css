@@ -13,13 +13,17 @@
   --accent:         #3decec;
   --accent-hover:   #6ff3f3;
   --accent-dim:     rgba(61, 236, 236, 0.15);
+  /* Couleur du texte posé sur un fond accent plein.
+     Sombre : l'accent cyan est très clair → texte très foncé (ratio ~10:1).
+     Clair : l'accent est foncé à #087a7a → texte blanc (ratio ~5.1:1). */
+  --on-accent:      #0c2e2e;
 
   --text:           #ffffff;
   --text-secondary: #a0a8b8;
-  --text-disabled:  #5c6478;
+  --text-muted:     #8b93a7;
+  --text-disabled:  #7b849b;
 
   --danger:         #e55353;
-  --danger-hover:   #cc3535;
   --danger-dim:     rgba(229, 83, 83, 0.15);
 
   --success:        #4caf7d;
@@ -30,6 +34,9 @@
 
   --border:         rgba(255, 255, 255, 0.07);
   --border-strong:  rgba(255, 255, 255, 0.14);
+
+  /* Chevron des <select> (couleur adaptée par thème) */
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23a0a8b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
 
   --shadow-sm:  0 1px 4px rgba(0, 0, 0, 0.4);
   --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.5);
@@ -80,14 +87,14 @@
   --duration-slow: 400ms;
 
   /* ── Layout ── */
-  --nav-height:     60px;
-  --safe-bottom:    env(safe-area-inset-bottom, 0px);
-  --safe-top:       env(safe-area-inset-top, 0px);
-  --page-padding:   var(--space-4);
-  --max-width:      680px;
+  --nav-height:         60px;
+  --safe-bottom:        env(safe-area-inset-bottom, 0px);
+  --safe-top:           env(safe-area-inset-top, 0px);
+  --max-width:          680px;
+  --page-header-height: 56px;
 
   /* ── Z-index ── */
-  --z-page:       0;
+  --z-sticky:     2;
   --z-nav:       10;
   --z-session:   20;
   --z-modal:     30;
@@ -103,16 +110,19 @@
   --bg-elevated:    #e6e8f0;
   --bg-input:       #f0f1f5;
 
-  --accent:         #0a9898;
-  --accent-hover:   #087a7a;
-  --accent-dim:     rgba(10, 152, 152, 0.12);
+  /* Accent foncé à #087a7a (au lieu de #0a9898) pour que le texte blanc
+     (--on-accent) passe le seuil AA 4.5:1 sur fond accent (~5.1:1). */
+  --accent:         #087a7a;
+  --accent-hover:   #066363;
+  --accent-dim:     rgba(8, 122, 122, 0.12);
+  --on-accent:      #ffffff;
 
   --text:           #1a1f2e;
   --text-secondary: #5c6478;
-  --text-disabled:  #9aa0b4;
+  --text-muted:     #6a7186;
+  --text-disabled:  #767d92;
 
   --danger:         #d44;
-  --danger-hover:   #bb3333;
   --danger-dim:     rgba(204, 68, 68, 0.12);
 
   --success:        #3a8e63;
@@ -123,6 +133,8 @@
 
   --border:         rgba(0, 0, 0, 0.07);
   --border-strong:  rgba(0, 0, 0, 0.14);
+
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235c6478' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
 
   --shadow-sm:  0 1px 4px rgba(0, 0, 0, 0.08);
   --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.10);

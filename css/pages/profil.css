@@ -43,7 +43,7 @@
   height: 64px;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -242,6 +242,7 @@
  * accessible et responsive.
  */
 .widget-card__remove {
+  position: relative;
   width: 24px;
   height: 24px;
   border-radius: var(--radius-full);
@@ -259,6 +260,14 @@
   transition:
     background var(--duration-fast) var(--ease),
     color var(--duration-fast) var(--ease);
+}
+
+/* Zone tactile élargie à 40×40 (24px visuel + 8px de chaque côté)
+   sans modifier le rendu visuel du bouton */
+.widget-card__remove::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
 }
 
 .widget-card__remove:hover {
@@ -711,13 +720,14 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-8) var(--space-2) var(--space-3);
-  font-size: var(--text-sm);
+  font-size: var(--text-base); /* ≥16px : évite le zoom auto de Safari iOS au focus */
   font-weight: var(--fw-medium);
   color: var(--text);
   cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23a0a8b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: var(--select-chevron);
   background-repeat: no-repeat;
   background-position: right 10px center;
+  background-size: 10px 6px;
   max-width: 160px;
   min-width: 80px;
   transition: border-color var(--duration-fast) var(--ease);
@@ -725,7 +735,6 @@
 
 .settings-select:focus {
   border-color: var(--accent);
-  outline: none;
 }
 
 
@@ -752,7 +761,7 @@
   height: 48px;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   display: flex;
   align-items: center;
   justify-content: center;
