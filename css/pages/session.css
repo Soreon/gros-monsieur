@@ -357,9 +357,10 @@
   text-align: center;
 }
 
-/* Done checkmark button */
+/* Zone de fin de ligne : badge PR éventuel + coche (largeur fixe partagée
+   avec .session-set-row__end pour garder les colonnes alignées) */
 .session-sets__col-check {
-  width: 44px;
+  width: 84px;
   text-align: center;
 }
 
@@ -518,6 +519,18 @@
  * Checkmark button — marks a set as done.
  * Scales down on press for tactile feedback.
  */
+
+/* Zone fixe en fin de ligne : réserve la place du badge PR même quand il est
+   absent, pour que kg/réps restent alignés entre les lignes avec et sans PR. */
+.session-set-row__end {
+  width: 84px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
 .session-set-row__check {
   width: 44px;
   height: 36px;

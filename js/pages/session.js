@@ -621,9 +621,12 @@ export default class SessionOverlay {
             placeholder="—"
             data-field="reps" data-ex-idx="${exIdx}" data-si="${si}"${lockAttr}
           >
-          <button class="session-set-row__check${checkClass}" data-action="toggle-set" data-ex-idx="${exIdx}" data-si="${si}">
-            ${prBadge}<i class="${checkIcon}"></i>
-          </button>
+          <span class="session-set-row__end">
+            ${prBadge}
+            <button class="session-set-row__check${checkClass}" data-action="toggle-set" data-ex-idx="${exIdx}" data-si="${si}">
+              <i class="${checkIcon}"></i>
+            </button>
+          </span>
         </div>
       </div>`;
   }
