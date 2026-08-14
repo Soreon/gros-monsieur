@@ -62,6 +62,7 @@ export default class EntrainementPage {
     this._editRoutine = null;      // deep-cloned routine being edited
     this._pickerSearch = '';
     this._longPressTimer = null;
+    this._longPressFired = false;
     this._handlers = {};
     this._page = null;
   }
@@ -333,14 +334,15 @@ export default class EntrainementPage {
       }
     };
 
-    // Search input live filter — added once; overlay cleared on close so no leak
-    overlay.addEventListener('input', (e) => {
+    // Search input live filter — assigned (not addEventListener) so each open
+    // replaces the previous handler; reset to null in _closeModal
+    overlay.oninput = (e) => {
       if (e.target.id === 'wk-picker-search') {
         this._pickerSearch = e.target.value.trim();
         const listEl = document.getElementById('wk-picker-list');
         if (listEl) listEl.innerHTML = this._buildPickerList();
       }
-    });
+    };
 
     // Focus search
     setTimeout(() => document.getElementById('wk-picker-search')?.focus(), 50);
@@ -836,12 +838,20 @@ export default class EntrainementPage {
   _onPointerDown(e) {
     const card = e.target.closest('.routine-card');
     if (!card) return;
+    this._longPressFired = false;
     this._longPressTimer = setTimeout(() => {
+      this._longPressFired = true;
       this._openRoutineMenu(card.dataset.id);
     }, 500);
   }
 
   _onPageClick(e) {
+    // Ignore the ghost click fired on pointer release after a long-press
+    if (this._longPressFired) {
+      this._longPressFired = false;
+      return;
+    }
+
     const target = e.target.closest('[data-action]');
     if (!target) return;
 
