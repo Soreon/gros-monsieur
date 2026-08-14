@@ -222,6 +222,13 @@
   gap: var(--space-5);
 }
 
+/* Message d'erreur sous le champ nom (ex. doublon de nom) */
+.exercise-form__error {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--danger);
+}
+
 /* ── Select button (ouvre un picker modal) ── */
 .select-btn {
   display: flex;

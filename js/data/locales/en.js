@@ -134,6 +134,7 @@ export default {
   'exercises.name_ph':         'Exercise name',
   'exercises.category':        'Category',
   'exercises.muscle_group':    'Body part',
+  'exercises.duplicate_name':  'An exercise with this name already exists',
   'exercises.archive_confirm': 'Archive this exercise?',
 
   /* ── Exercise categories ── */

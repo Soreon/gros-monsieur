@@ -117,6 +117,8 @@ export default class ExercicesPage {
     // Timers & refs pour long press
     this._longPressTimer = null;
     this._longPressTarget = null;
+    this._pressStartX = 0;
+    this._pressStartY = 0;
 
     // Listeners attachés au document / window (pour destroy)
     this._handlers = {};
@@ -138,10 +140,31 @@ export default class ExercicesPage {
     if (this._handlers.docKeydown) {
       document.removeEventListener('keydown', this._handlers.docKeydown);
     }
+    // Retirer les listeners attachés au container partagé
+    if (this._handlers.containerClick) {
+      this.container.removeEventListener('click', this._handlers.containerClick);
+    }
+    if (this._handlers.containerInput) {
+      this.container.removeEventListener('input', this._handlers.containerInput);
+    }
+    if (this._handlers.containerPointerDown) {
+      this.container.removeEventListener('pointerdown', this._handlers.containerPointerDown);
+    }
+    if (this._handlers.containerPointerUp) {
+      this.container.removeEventListener('pointerup', this._handlers.containerPointerUp);
+    }
+    if (this._handlers.containerPointerCancel) {
+      this.container.removeEventListener('pointercancel', this._handlers.containerPointerCancel);
+    }
+    if (this._handlers.containerPointerMove) {
+      this.container.removeEventListener('pointermove', this._handlers.containerPointerMove);
+    }
+    this._handlers = {};
     // Fermer toute modale ouverte
     this._closeModal();
     // Nettoyer le timer de long press
     clearTimeout(this._longPressTimer);
+    this._longPressTimer = null;
   }
 
   // ── Shell HTML ───────────────────────────────────────────────────────────────
@@ -242,7 +265,7 @@ export default class ExercicesPage {
         <div class="empty-state">
           <i class="fa-solid fa-dumbbell empty-state__icon"></i>
           <p class="empty-state__title">${t('exercises.empty_search')}</p>
-          <p class="empty-state__text">${this._searchQuery ? normalize(this._searchQuery) : ''}</p>
+          <p class="empty-state__text">${this._searchQuery ? escapeHtml(normalize(this._searchQuery)) : ''}</p>
         </div>`;
       return;
     }
@@ -279,7 +302,7 @@ export default class ExercicesPage {
   }
 
   _buildExerciseItem(ex) {
-    const initial = ex.name.trim().charAt(0).toUpperCase();
+    const initial = ex.name.trim().charAt(0).toUpperCase() || '?';
     const color   = colorForId(ex.id);
     const muscle  = ex.muscleGroup ? t(`muscle.${ex.muscleGroup}`) : '';
     const countHtml = (ex.usageCount && ex.usageCount > 0)
@@ -290,14 +313,14 @@ export default class ExercicesPage {
     return `
       <div
         class="exercise-item${archivedClass}"
-        data-id="${ex.id}"
+        data-id="${escapeHtml(ex.id)}"
         data-action="open-exercise"
       >
         <div class="exercise-item__icon" style="background:${color}22;color:${color};">
-          ${initial}
+          ${escapeHtml(initial)}
         </div>
         <div class="exercise-item__body">
-          <div class="exercise-item__name">${ex.name}</div>
+          <div class="exercise-item__name">${escapeHtml(ex.name)}</div>
           <div class="exercise-item__meta">${muscle}</div>
         </div>
         ${countHtml}
@@ -348,21 +371,32 @@ export default class ExercicesPage {
     document.addEventListener('keydown', this._handlers.docKeydown);
 
     // Recherche (input)
-    this.container.addEventListener('input', (e) => {
+    this._handlers.containerInput = (e) => {
       if (e.target.id === 'ex-search-input') {
         this._searchQuery = e.target.value.trim();
         this._renderList();
       }
-    });
+    };
+    this.container.addEventListener('input', this._handlers.containerInput);
 
     // Long press pour archiver
-    this.container.addEventListener('pointerdown', (e) => this._onPointerDown(e));
-    this.container.addEventListener('pointerup',   (e) => this._onPointerUp(e));
-    this.container.addEventListener('pointercancel', () => clearTimeout(this._longPressTimer));
-    this.container.addEventListener('pointermove',  (e) => {
-      // Annuler si le doigt se déplace trop
-      clearTimeout(this._longPressTimer);
-    });
+    this._handlers.containerPointerDown   = (e) => this._onPointerDown(e);
+    this._handlers.containerPointerUp     = (e) => this._onPointerUp(e);
+    this._handlers.containerPointerCancel = () => this._onPointerUp();
+    this._handlers.containerPointerMove   = (e) => {
+      // Annuler seulement si le doigt se déplace au-delà d'un seuil
+      if (this._longPressTimer === null) return;
+      const dx = Math.abs(e.clientX - this._pressStartX);
+      const dy = Math.abs(e.clientY - this._pressStartY);
+      if (dx > 8 || dy > 8) {
+        clearTimeout(this._longPressTimer);
+        this._longPressTimer = null;
+      }
+    };
+    this.container.addEventListener('pointerdown',   this._handlers.containerPointerDown);
+    this.container.addEventListener('pointerup',     this._handlers.containerPointerUp);
+    this.container.addEventListener('pointercancel', this._handlers.containerPointerCancel);
+    this.container.addEventListener('pointermove',   this._handlers.containerPointerMove);
   }
 
   // ── Gestionnaire de clic principal (délégation) ──────────────────────────────
@@ -578,6 +612,7 @@ export default class ExercicesPage {
                 autocorrect="off"
                 spellcheck="false"
               >
+              <p class="exercise-form__error hidden" id="ex-form-error"></p>
             </div>
             <div class="input-group" style="margin-top:var(--space-4);">
               <label class="input-label">${t('exercises.category')}</label>
@@ -607,6 +642,9 @@ export default class ExercicesPage {
           formName = e.target.value;
           const saveBtn = overlay.querySelector('[data-action="form-save"]');
           if (saveBtn) saveBtn.disabled = !formName.trim();
+          // Masquer l'erreur dès que le nom change
+          const errorEl = document.getElementById('ex-form-error');
+          if (errorEl) errorEl.classList.add('hidden');
         });
       }
 
@@ -747,6 +785,14 @@ export default class ExercicesPage {
       });
     } catch (err) {
       console.error('[Exercices] Erreur sauvegarde :', err);
+      // Doublon de nom (index `name` unique) → feedback dans le formulaire
+      const errorEl = document.getElementById('ex-form-error');
+      if (errorEl) {
+        errorEl.textContent = (err && err.name === 'ConstraintError')
+          ? t('exercises.duplicate_name')
+          : (err && err.message ? err.message : String(err));
+        errorEl.classList.remove('hidden');
+      }
     }
   }
 
@@ -774,14 +820,18 @@ export default class ExercicesPage {
     const item = e.target.closest('.exercise-item');
     if (!item) return;
 
+    this._pressStartX     = e.clientX;
+    this._pressStartY     = e.clientY;
     this._longPressTarget = item;
     this._longPressTimer  = setTimeout(() => {
+      this._longPressTimer = null;
       this._showItemActions(item.dataset.id);
     }, 500);
   }
 
   _onPointerUp() {
     clearTimeout(this._longPressTimer);
+    this._longPressTimer = null;
   }
 
   _showItemActions(id) {
