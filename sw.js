@@ -4,7 +4,7 @@
  * Le shell et Font Awesome Pro sont mis en cache dès l'installation.
  */
 
-const CACHE_VERSION = 'gm-v11';
+const CACHE_VERSION = 'gm-v12';
 
 // Assets à mettre en cache lors de l'installation (app shell)
 const PRECACHE_ASSETS = [
@@ -27,6 +27,7 @@ const PRECACHE_ASSETS = [
   './js/db.js',
   './js/store.js',
   './js/components/bottom-nav.js',
+  './js/components/modal.js',
   './js/pages/profil.js',
   './js/pages/historique.js',
   './js/pages/entrainement.js',
@@ -38,6 +39,7 @@ const PRECACHE_ASSETS = [
   './js/data/exercises-seed.js',
   './js/utils/helpers.js',
   './js/utils/export.js',
+  './js/utils/chart.js',
   './assets/icons/icon.svg',
   './assets/icons/icon-180.png',
   './assets/icons/icon-192.png',
@@ -92,8 +94,11 @@ self.addEventListener('fetch', event => {
               return response;
             }
             const toCache = response.clone();
+            // Fire-and-forget mais catché : un échec (quota plein) ne doit pas
+            // produire de rejet non géré.
             caches.open(CACHE_VERSION)
-              .then(cache => cache.put(event.request, toCache));
+              .then(cache => cache.put(event.request, toCache))
+              .catch(() => {});
             return response;
           })
           .catch(() => {
