@@ -419,7 +419,9 @@
  * values are locked in (user can still edit them).
  */
 .session-set-row--done {
-  background: var(--success-dim);
+  /* --success-dim est translucide : on le compose PAR-DESSUS le fond opaque
+     --bg, sinon le bouton delete du swipe (absolu, derrière) transparaît. */
+  background: linear-gradient(var(--success-dim), var(--success-dim)), var(--bg);
 }
 
 .session-set-row--done .session-set-row__input {
