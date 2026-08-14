@@ -17,6 +17,7 @@ import {
   estimate1RM,
 } from '../utils/helpers.js';
 import { lineChart } from '../utils/chart.js';
+import { getInstallState, requestInstall } from '../app.js';
 import {
   dbGetProfile,
   dbSaveProfile,
@@ -817,6 +818,18 @@ export default class ProfilPage {
           </div>
         </section>
 
+        ${getInstallState() !== 'installed' ? `
+        <!-- Section: Application -->
+        <section class="settings-section">
+          <h2 class="settings-section__title">${t('settings.app')}</h2>
+          <div class="settings-row">
+            <button class="btn btn--ghost" data-action="install-app">
+              <i class="fa-solid fa-mobile-screen"></i>
+              ${t('settings.install')}
+            </button>
+          </div>
+        </section>` : ''}
+
         <!-- Section: Data -->
         <section class="settings-section">
           <h2 class="settings-section__title">${t('settings.data')}</h2>
@@ -960,6 +973,21 @@ export default class ProfilPage {
     if (e.target.closest('[data-action="cancel-profile-edit"]')) {
       this._settingsEditingProfile = false;
       this._renderSettings();
+      return;
+    }
+
+    // Install the PWA (manual path — bypasses the banner and its cooldown)
+    if (e.target.closest('[data-action="install-app"]')) {
+      const state = getInstallState();
+      if (state === 'available') {
+        requestInstall().then(outcome => {
+          if (outcome === 'accepted') this._renderSettings();
+        });
+      } else if (state === 'ios') {
+        alert(t('settings.install_hint_ios'));
+      } else if (state === 'unavailable') {
+        alert(t('settings.install_unavailable'));
+      }
       return;
     }
 

@@ -128,6 +128,8 @@ window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   _installPrompt = e;
   _showInstallBanner();
+  // Informe les vues ouvertes (ex. paramètres) que l'installation est possible
+  window.dispatchEvent(new CustomEvent('gm-install-available'));
 });
 
 window.addEventListener('appinstalled', () => {
@@ -207,6 +209,39 @@ function _hideInstallBanner() {
   const banner = document.getElementById('install-banner');
   if (!banner) return;
   banner.classList.remove('install-banner--visible');
+}
+
+// ── API d'installation manuelle (utilisée par la page Paramètres) ──────────
+
+/**
+ * État de l'installation PWA :
+ *  - 'installed'   : déjà lancée en standalone
+ *  - 'available'   : beforeinstallprompt capturé → requestInstall() possible
+ *  - 'ios'         : Safari iOS (installation manuelle via Partager)
+ *  - 'unavailable' : le navigateur n'a pas (encore) proposé l'installation
+ */
+export function getInstallState() {
+  if (_isStandalone) return 'installed';
+  if (_installPrompt) return 'available';
+  if (_isIOS) return 'ios';
+  return 'unavailable';
+}
+
+/**
+ * Déclenche le prompt d'installation natif (Chrome/Edge/Android).
+ * Retourne 'accepted' | 'dismissed' | null si aucun prompt disponible.
+ * Contourne volontairement le cooldown du bandeau : c'est une action
+ * explicite de l'utilisateur.
+ */
+export async function requestInstall() {
+  if (!_installPrompt) return null;
+  _installPrompt.prompt();
+  const { outcome } = await _installPrompt.userChoice;
+  if (outcome === 'accepted') {
+    _installPrompt = null;
+    _hideInstallBanner();
+  }
+  return outcome;
 }
 
 init().catch(err => {
