@@ -72,6 +72,8 @@ export default {
   'history.best_set':          'Best set',
   'history.delete_confirm':    'Delete this workout?',
   'history.delete_confirm_sub':'This action cannot be undone.',
+  'history.repeat':            'Repeat this workout',
+  'history.session_active':    'A workout is already in progress',
 
   /* ── Workout / Routines page ── */
   'workout.title':             'Workout',

@@ -4,6 +4,7 @@
 
 import { t } from '../i18n.js';
 import { dbGetAllSessions, dbDelete } from '../db.js';
+import { getState } from '../store.js';
 import {
   formatDuration,
   formatDate,
@@ -24,6 +25,21 @@ function setTypeAbbr(type) {
   if (type === 'drop')    return 'D';
   if (type === 'failure') return 'F';
   return 'N';
+}
+
+// Toast notification (même conteneur global #toast-container que session.js)
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = `toast toast--${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('toast--visible')));
+  setTimeout(() => {
+    toast.classList.remove('toast--visible');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
 }
 
 // =============================================================================
@@ -389,6 +405,11 @@ export default class HistoriquePage {
             ${prHtml}
           </div>
 
+          <button class="btn btn--primary btn--full hist-detail__repeat" id="hist-repeat-btn">
+            <i class="fa-solid fa-rotate-right"></i>
+            ${t('history.repeat')}
+          </button>
+
           <div class="hist-detail__exercises">
             ${exercisesHtml}
           </div>
@@ -482,6 +503,60 @@ export default class HistoriquePage {
         this._showDeleteModal(sessionId);
       });
     }
+
+    const repeatBtn = this.container.querySelector('#hist-repeat-btn');
+    if (repeatBtn) {
+      repeatBtn.addEventListener('click', () => {
+        this._repeatSession(this._selectedSession);
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Repeat session ("Refaire cette séance")
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Rejoue une séance passée : construit une routine éphémère (non persistée)
+   * depuis la séance et déclenche le démarrage via l'événement 'start-session'
+   * — le même mécanisme que les routines (app.js → SessionOverlay.start()).
+   */
+  _repeatSession(session) {
+    if (!session) return;
+
+    // Une seule séance à la fois
+    if (getState('activeSession')) {
+      showToast(t('history.session_active'), 'error');
+      return;
+    }
+
+    // Routine éphémère : poids/reps repris comme cibles, séries non complétées
+    // (SessionOverlay.start() remet completed/isPR à false). Les lignes de
+    // repos (type 'timer') ne sont pas des séries — exclues.
+    const routine = {
+      id: session.routineId ?? null,   // routine d'origine si elle existe (prev-sets)
+      name: session.name,
+      exercises: (session.exercises || [])
+        .map(ex => ({
+          exerciseId: ex.exerciseId,
+          note: '',
+          sets: (ex.sets || [])
+            .filter(s => s.type !== 'timer')
+            .map(s => ({
+              type:   s.type   || 'normal',
+              weight: s.weight || 0,
+              reps:   s.reps   || 0,
+            })),
+        }))
+        .filter(ex => ex.sets.length > 0),
+    };
+
+    this.container.dispatchEvent(
+      new CustomEvent('start-session', {
+        bubbles: true,
+        detail: { routine },
+      })
+    );
   }
 
   // ---------------------------------------------------------------------------

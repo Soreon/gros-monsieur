@@ -270,6 +270,13 @@
   overflow: hidden;
 }
 
+/* ── Bouton « Refaire cette séance » ──
+   Réutilise .btn .btn--primary .btn--full (components.css) : seul l'espacement
+   avec la liste d'exercices est défini ici. */
+.hist-detail__repeat {
+  margin-bottom: var(--space-5);
+}
+
 /* Colonne individuelle de stat */
 .hist-detail__stat {
   flex: 1;

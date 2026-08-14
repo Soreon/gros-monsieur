@@ -111,7 +111,15 @@ export default class SessionOverlay {
   // Public API
   // ---------------------------------------------------------------------------
 
-  async start(routineId) {
+  /**
+   * Démarre une séance.
+   * @param {string|object|null} routineOrId
+   *   - string : id d'une routine persistée en base (flux classique)
+   *   - object : routine éphémère non persistée (ex. « Refaire cette séance »
+   *     depuis l'historique) — {id?, name, exercises: [{exerciseId, sets, note?}]}
+   *   - null   : séance libre
+   */
+  async start(routineOrId) {
     // Prevent double-start
     if (this._session) return;
 
@@ -125,13 +133,20 @@ export default class SessionOverlay {
 
     this._exercises = exercises.filter(ex => !ex.isArchived);
 
-    const routine = routineId ? routines.find(r => r.id === routineId) : null;
+    // Routine éphémère (objet) ou routine persistée (id) ?
+    const isEphemeral = routineOrId !== null && typeof routineOrId === 'object';
+    const routine = isEphemeral
+      ? routineOrId
+      : (routineOrId ? routines.find(r => r.id === routineOrId) : null);
+    // routineId : conservé pour prev-sets / lastUsedAt. Une routine éphémère
+    // peut porter l'id de la routine d'origine (ou null si séance libre).
+    const routineId = isEphemeral ? (routine.id ?? null) : (routineOrId || null);
 
     // Garde défensive : routine introuvable ou sans exercices valides
     const routineExercises = routine
       ? (Array.isArray(routine.exercises) ? routine.exercises : [])
       : [];
-    if (routineId && (!routine || routineExercises.length === 0)) {
+    if ((routineId || isEphemeral) && (!routine || routineExercises.length === 0)) {
       this._showToast(t('session.routine_empty'), 'error');
       return;
     }

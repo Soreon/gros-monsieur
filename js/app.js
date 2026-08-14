@@ -80,7 +80,9 @@ async function init() {
   // 6. Session overlay (persistant, écoute l'événement 'start-session')
   const sessionOverlay = new SessionOverlay();
   document.getElementById('app').addEventListener('start-session', async (e) => {
-    await sessionOverlay.start(e.detail?.routineId ?? null);
+    // detail.routine : objet routine éphémère (ex. « Refaire cette séance »
+    // depuis l'historique) — detail.routineId : routine persistée en base.
+    await sessionOverlay.start(e.detail?.routine ?? e.detail?.routineId ?? null);
   });
 
   // 6b. Reprise d'une séance interrompue (brouillon localStorage

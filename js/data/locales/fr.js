@@ -72,6 +72,8 @@ export default {
   'history.best_set':          'Meilleure série',
   'history.delete_confirm':    'Supprimer cet entraînement ?',
   'history.delete_confirm_sub':'Cette action est irréversible.',
+  'history.repeat':            'Refaire cette séance',
+  'history.session_active':    'Une séance est déjà en cours',
 
   /* ── Page Entraînement / Routines ── */
   'workout.title':             'Entraînement',
