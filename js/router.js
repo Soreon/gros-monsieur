@@ -28,6 +28,9 @@ let currentRoute = null;
 /** Positions de scroll mémorisées par route. */
 const _scrollPositions = {};
 
+/** Jeton de génération — invalide les navigations entrelacées (hashchange rapprochés). */
+let _navToken = 0;
+
 /** Initialise le routeur. Doit être appelé après le rendu de la nav. */
 export function initRouter() {
   window.addEventListener('hashchange', handleRoute);
@@ -56,6 +59,7 @@ export function getCurrentRoute() {
 
 /** Charge et affiche la page correspondant au hash actuel. */
 async function handleRoute() {
+  const token  = ++_navToken;
   const route  = getCurrentRoute();
   const loader = ROUTES[route] ?? ROUTES[DEFAULT_ROUTE];
   const container = document.getElementById('page-container');
@@ -87,9 +91,21 @@ async function handleRoute() {
 
     // Charge et instancie la nouvelle page
     const module = await loader();
+    // Une navigation plus récente a pris la main pendant l'import : on abandonne
+    // sans toucher au DOM ni à currentPage (sinon la page abandonnée fuirait ses
+    // écouteurs, jamais détruite).
+    if (token !== _navToken) return;
     const PageClass = module.default;
-    currentPage = new PageClass(container);
-    await currentPage.render();
+    const page = new PageClass(container);
+    currentPage = page;
+    await page.render();
+    if (token !== _navToken) {
+      // Une navigation plus récente est passée pendant le render : on nettoie
+      // notre instance seulement si elle est encore la page courante.
+      if (currentPage === page) currentPage = null;
+      page.destroy?.();
+      return;
+    }
 
     // ── Animation directionnelle ──────────────────────────────────────────
     // On applique toujours une classe d'animation (jamais via CSS sur .page directement),

@@ -2,8 +2,11 @@
  * helpers.js — Fonctions utilitaires pures
  * Gros Monsieur PWA
  *
- * Aucune dépendance externe. Toutes les fonctions sont exportées nommément.
+ * Seule dépendance : i18n (locale active pour le formatage dates/nombres).
+ * Toutes les fonctions sont exportées nommément.
  */
+
+import { getLocale } from '../i18n.js';
 
 // ── Identifiants ─────────────────────────────────────────────
 
@@ -60,7 +63,7 @@ export function formatDuration(seconds, showSeconds = false) {
  */
 export function formatDate(timestamp, options = {}) {
   const defaults = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
-  return new Intl.DateTimeFormat('fr-FR', { ...defaults, ...options }).format(
+  return new Intl.DateTimeFormat(getLocale(), { ...defaults, ...options }).format(
     new Date(timestamp)
   );
 }
@@ -71,7 +74,7 @@ export function formatDate(timestamp, options = {}) {
  * @returns {string} ex: "17/02/2026"
  */
 export function formatDateShort(timestamp) {
-  return new Intl.DateTimeFormat('fr-FR', {
+  return new Intl.DateTimeFormat(getLocale(), {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -84,7 +87,7 @@ export function formatDateShort(timestamp) {
  * @returns {string} ex: "12:08"
  */
 export function formatTime(timestamp) {
-  return new Intl.DateTimeFormat('fr-FR', {
+  return new Intl.DateTimeFormat(getLocale(), {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
@@ -97,7 +100,7 @@ export function formatTime(timestamp) {
  * @returns {string} ex: "Février 2026"
  */
 export function formatMonthYear(timestamp) {
-  const raw = new Intl.DateTimeFormat('fr-FR', {
+  const raw = new Intl.DateTimeFormat(getLocale(), {
     month: 'long',
     year: 'numeric',
   }).format(new Date(timestamp));
@@ -151,12 +154,12 @@ export function estimate1RM(weight, reps) {
 
 /**
  * Formate un poids en kilogrammes.
- * Utilise la virgule décimale française.
+ * Séparateur décimal selon la locale active.
  * @param {number} kg
  * @returns {string} ex: "100 kg", "22,5 kg"
  */
 export function formatWeight(kg) {
-  const formatted = Number(kg).toLocaleString('fr-FR', {
+  const formatted = Number(kg).toLocaleString(getLocale(), {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });

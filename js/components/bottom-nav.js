@@ -17,6 +17,15 @@ const NAV_ITEMS = [
 export class BottomNav {
   constructor(el) {
     this.el = el;
+
+    // Délégation d'événements — liée une seule fois ici : render() peut être
+    // rappelé (re-render) sans dupliquer le handler.
+    this.el.addEventListener('click', e => {
+      const btn = e.target.closest('.bottom-nav__item');
+      if (btn?.dataset.route) {
+        navigate(btn.dataset.route);
+      }
+    });
   }
 
   render() {
@@ -36,13 +45,5 @@ export class BottomNav {
           <span class="bottom-nav__label">${t(item.labelKey)}</span>
         </button>`;
     }).join('');
-
-    // Délégation d'événements
-    this.el.addEventListener('click', e => {
-      const btn = e.target.closest('.bottom-nav__item');
-      if (btn?.dataset.route) {
-        navigate(btn.dataset.route);
-      }
-    });
   }
 }
