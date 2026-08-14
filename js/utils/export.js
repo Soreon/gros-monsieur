@@ -23,15 +23,7 @@ import {
   dbGetAllRoutines,
   dbGetAllSessions,
   dbGetAllMeasurements,
-  dbSaveProfile,
-  dbPutExercise,
-  dbPutRoutine,
-  dbPutSession,
-  dbPutMeasurement,
-  dbClearRoutines,
-  dbClearSessions,
-  dbClearMeasurements,
-  dbClearCustomExercises,
+  dbTransaction,
 } from '../db.js';
 
 /** Version courante du format d'export. Incrémenter si la structure change. */
@@ -155,37 +147,82 @@ export async function importData() {
     return { success: false, message: 'Import annulé par l\'utilisateur.' };
   }
 
-  // 5. Import dans IndexedDB
+  // 5. Import dans IndexedDB — tout (clears + puts + profil) dans UNE SEULE
+  //    transaction : si quoi que ce soit échoue, IndexedDB annule l'ensemble
+  //    et les données existantes restent intactes.
   try {
-    // Profil
+    // Profil : fusion avec le profil courant afin de préserver les settings
+    // existants si le fichier importé en est dépourvu (import partiel).
+    let profileToSave = null;
     if (data.profile) {
-      await dbSaveProfile(data.profile);
+      const currentProfile = await dbGetProfile();
+      profileToSave = {
+        ...currentProfile,
+        ...data.profile,
+        settings: {
+          ...(currentProfile?.settings ?? {}),
+          ...(data.profile.settings ?? {}),
+        },
+        id: 'singleton',
+      };
     }
 
-    // Exercices personnalisés uniquement
-    await dbClearCustomExercises();
+    // Exercices : seuls les personnalisés (isCustom: true) sont réimportés.
     const customExercises = (data.exercises ?? []).filter((ex) => ex.isCustom === true);
-    for (const ex of customExercises) {
-      await dbPutExercise(ex);
-    }
+    const routines        = data.routines ?? [];
+    const sessions        = data.sessions ?? [];
+    const measurements    = data.measurements ?? [];
 
-    // Routines
-    await dbClearRoutines();
-    for (const routine of data.routines ?? []) {
-      await dbPutRoutine(routine);
-    }
+    await dbTransaction(
+      ['profile', 'exercises', 'routines', 'sessions', 'measurements'],
+      'readwrite',
+      (tx) => {
+        // Profil
+        if (profileToSave) {
+          tx.objectStore('profile').put(profileToSave);
+        }
 
-    // Sessions
-    await dbClearSessions();
-    for (const session of data.sessions ?? []) {
-      await dbPutSession(session);
-    }
+        // Exercices : suppression des personnalisés existants uniquement
+        // (le seed est conservé), puis réinsertion des personnalisés importés.
+        const exercisesStore = tx.objectStore('exercises');
+        const cursorReq = exercisesStore.openCursor();
+        cursorReq.onsuccess = () => {
+          const cursor = cursorReq.result;
+          if (cursor) {
+            if (cursor.value?.isCustom === true) {
+              cursor.delete();
+            }
+            cursor.continue();
+          } else {
+            // Personnalisés existants supprimés : on insère ceux importés.
+            for (const ex of customExercises) {
+              exercisesStore.put(ex);
+            }
+          }
+        };
 
-    // Mesures
-    await dbClearMeasurements();
-    for (const measurement of data.measurements ?? []) {
-      await dbPutMeasurement(measurement);
-    }
+        // Routines
+        const routinesStore = tx.objectStore('routines');
+        routinesStore.clear();
+        for (const routine of routines) {
+          routinesStore.put(routine);
+        }
+
+        // Sessions
+        const sessionsStore = tx.objectStore('sessions');
+        sessionsStore.clear();
+        for (const session of sessions) {
+          sessionsStore.put(session);
+        }
+
+        // Mesures
+        const measurementsStore = tx.objectStore('measurements');
+        measurementsStore.clear();
+        for (const measurement of measurements) {
+          measurementsStore.put(measurement);
+        }
+      }
+    );
 
     return { success: true, message: 'Données importées avec succès.' };
   } catch (err) {
@@ -204,6 +241,8 @@ export async function importData() {
  *  - que tous les champs obligatoires sont présents
  *  - que la version est un entier positif connu
  *  - que les collections sont bien des tableaux
+ *  - que chaque enregistrement est un objet avec un `id` string non vide
+ *  - que `profile`, s'il est présent, est bien un objet
  *
  * @param {any} data
  * @returns {{ valid: boolean, error?: string }}
@@ -236,11 +275,28 @@ export function validateExportData(data) {
     return { valid: false, error: 'Le champ "exportedAt" doit être un timestamp numérique.' };
   }
 
-  // Collections : doivent être des tableaux
+  // Collections : doivent être des tableaux d'objets avec un id valide
   for (const field of ['exercises', 'routines', 'sessions', 'measurements']) {
     if (!Array.isArray(data[field])) {
       return { valid: false, error: `Le champ "${field}" doit être un tableau.` };
     }
+    for (let i = 0; i < data[field].length; i++) {
+      const item = data[field][i];
+      if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+        return { valid: false, error: `L'élément "${field}[${i}]" n'est pas un objet valide.` };
+      }
+      if (typeof item.id !== 'string' || item.id.trim() === '') {
+        return {
+          valid: false,
+          error: `L'élément "${field}[${i}]" doit avoir un champ "id" (chaîne non vide).`,
+        };
+      }
+    }
+  }
+
+  // Profil : s'il est présent (non null), ce doit être un objet
+  if (data.profile != null && (typeof data.profile !== 'object' || Array.isArray(data.profile))) {
+    return { valid: false, error: 'Le champ "profile" doit être un objet.' };
   }
 
   return { valid: true };
@@ -278,8 +334,13 @@ function _pickJsonFile() {
     window.addEventListener(
       'focus',
       () => {
-        // Laisse un court délai pour que l'événement "change" passe en premier.
-        setTimeout(() => done(null), 300);
+        // Laisse un délai généreux pour que l'événement "change" passe en
+        // premier (il peut être différé sur iOS ou avec un gros fichier).
+        setTimeout(() => {
+          // Si un fichier a finalement été sélectionné, on le retourne
+          // au lieu de résoudre null à tort.
+          done(input.files?.[0] ?? null);
+        }, 1000);
       },
       { once: true }
     );

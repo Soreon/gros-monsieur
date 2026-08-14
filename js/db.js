@@ -237,6 +237,47 @@ export async function dbCount(store) {
   return _wrapRequest(s.count());
 }
 
+/**
+ * Exécute plusieurs opérations dans UNE SEULE transaction IndexedDB.
+ *
+ * Toutes les opérations effectuées via `fn(tx)` sont atomiques : si l'une
+ * échoue (ou si `fn` lève une exception), la transaction est annulée et
+ * aucune modification n'est appliquée.
+ *
+ * La promesse est résolue sur `tx.oncomplete` (avec la valeur retournée
+ * par `fn`) et rejetée sur `tx.onerror` / `tx.onabort`.
+ *
+ * ⚠️ `fn` ne doit pas attendre de promesses externes (fetch, setTimeout…) :
+ * une transaction IndexedDB s'auto-commit dès qu'il n'y a plus de requête
+ * en attente. Utiliser les callbacks des requêtes IDB pour enchaîner.
+ *
+ * @param {string|string[]} storeNames - Store(s) concerné(s)
+ * @param {'readonly'|'readwrite'} mode
+ * @param {(tx: IDBTransaction) => any} fn - Opérations à exécuter dans la transaction
+ * @returns {Promise<any>} - La valeur retournée par `fn`
+ */
+export async function dbTransaction(storeNames, mode, fn) {
+  const db = await openDB();
+  const tx = db.transaction(storeNames, mode);
+
+  return new Promise((resolve, reject) => {
+    let result;
+
+    tx.oncomplete = () => resolve(result);
+    tx.onerror    = () => reject(tx.error ?? new Error('[db] Transaction échouée.'));
+    tx.onabort    = () => reject(tx.error ?? new Error('[db] Transaction annulée.'));
+
+    try {
+      result = fn(tx);
+    } catch (err) {
+      // Une exception synchrone (ex. DataError sur put sans keyPath)
+      // annule toute la transaction : rien n'est appliqué.
+      try { tx.abort(); } catch { /* déjà annulée/terminée */ }
+      reject(err);
+    }
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Fonctions de commodité par store (utilisées par les pages et export.js)
 // ---------------------------------------------------------------------------
