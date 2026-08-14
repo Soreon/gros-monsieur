@@ -27,8 +27,9 @@ function escapeHtml(str) {
 
 // Set type abbreviation
 function setTypeAbbr(type) {
-  if (type === 'warmup') return 'W';
-  if (type === 'drop')   return 'D';
+  if (type === 'warmup')  return 'W';
+  if (type === 'drop')    return 'D';
+  if (type === 'failure') return 'F';
   return 'N';
 }
 
@@ -46,10 +47,11 @@ export default class HistoriquePage {
     this._selectedSession = null;
 
     // Long-press tracking
-    this._pressTimer    = null;
-    this._pressStartX   = 0;
-    this._pressStartY   = 0;
-    this._pressingCard  = null;
+    this._pressTimer     = null;
+    this._pressStartX    = 0;
+    this._pressStartY    = 0;
+    this._pressingCard   = null;
+    this._longPressFired = false;
 
     // Document-level handlers (removed in destroy())
     this._handlers = {};
@@ -210,15 +212,17 @@ export default class HistoriquePage {
       const card = e.target.closest('.hist-card');
       if (!card) return;
 
-      this._pressStartX  = e.clientX;
-      this._pressStartY  = e.clientY;
-      this._pressingCard = card;
+      this._pressStartX    = e.clientX;
+      this._pressStartY    = e.clientY;
+      this._pressingCard   = card;
+      this._longPressFired = false;
       card.classList.add('hist-card--pressing');
 
       this._pressTimer = setTimeout(() => {
         this._pressTimer = null;
         card.classList.remove('hist-card--pressing');
-        this._pressingCard = null;
+        this._pressingCard   = null;
+        this._longPressFired = true;
         const id = card.dataset.sessionId;
         this._showDeleteModal(id);
       }, 500);
@@ -239,8 +243,11 @@ export default class HistoriquePage {
 
     // ---- Tap → detail view ----
     list.addEventListener('click', e => {
-      // Ignore if a long-press just fired
-      if (this._pressTimer === null && this._pressingCard) return;
+      // Ignore the release click that follows a long-press
+      if (this._longPressFired) {
+        this._longPressFired = false;
+        return;
+      }
 
       const card = e.target.closest('.hist-card');
       if (!card) return;
@@ -273,6 +280,14 @@ export default class HistoriquePage {
   _initPullToRefresh() {
     const container  = this.container;  // scrollable element
     const THRESHOLD  = 60;              // px to pull before releasing triggers refresh
+
+    // Remove any previously installed listeners (called on every _renderList)
+    if (this._ptrHandlers) {
+      container.removeEventListener('touchstart', this._ptrHandlers.onTouchStart);
+      container.removeEventListener('touchmove',  this._ptrHandlers.onTouchMove);
+      container.removeEventListener('touchend',   this._ptrHandlers.onTouchEnd);
+      this._ptrHandlers = null;
+    }
 
     let startY      = 0;
     let pulling     = false;
@@ -407,8 +422,9 @@ export default class HistoriquePage {
       ? `<p class="hist-exercise__note">${escapeHtml(exercise.note)}</p>`
       : '';
 
-    // Sets table
+    // Sets table (rest timers are not actual sets — skip them)
     const setsHtml = (exercise.sets || [])
+      .filter(set => set.type !== 'timer')
       .map(set => this._setRowHtml(set))
       .join('');
 
@@ -505,13 +521,12 @@ export default class HistoriquePage {
         </div>
       </div>`;
 
-    overlay.classList.add('modal-overlay--visible');
-    overlay.style.display = 'flex';
+    overlay.classList.remove('hidden');
 
     const closeModal = () => {
-      overlay.style.display = 'none';
-      overlay.classList.remove('modal-overlay--visible');
+      overlay.classList.add('hidden');
       overlay.innerHTML = '';
+      overlay.onclick   = null;
     };
 
     const cancelBtn = overlay.querySelector('#hist-modal-cancel');
@@ -530,9 +545,9 @@ export default class HistoriquePage {
       this._render();
     });
 
-    // Close on backdrop click
-    overlay.addEventListener('click', e => {
+    // Close on backdrop click (overwritten on each open, cleared in closeModal)
+    overlay.onclick = e => {
       if (e.target === overlay) closeModal();
-    }, { once: true });
+    };
   }
 }
