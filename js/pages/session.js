@@ -23,6 +23,11 @@ import { setState, getState } from '../store.js';
 // Clé localStorage du brouillon de séance active (persistance anti-crash/refresh)
 const DRAFT_KEY = 'gm-active-session';
 
+// Calculateur de disques : jeu standard de disques (kg, par côté, ordre
+// décroissant pour l'algorithme glouton) et barres proposées (kg)
+const PLATE_SET   = [25, 20, 15, 10, 5, 2.5, 1.25];
+const BAR_OPTIONS = [20, 15, 10, 7.5, 6];
+
 export default class SessionOverlay {
   constructor() {
     this._overlay   = document.getElementById('session-overlay');
@@ -1068,6 +1073,10 @@ export default class SessionOverlay {
     overlay.innerHTML = `
       <div class="action-sheet">
         <div class="action-sheet__title">${exercise ? escapeHtml(exercise.name) : '?'}</div>
+        <div class="action-sheet__item" data-action="open-plate-calc" data-ex-idx="${exIdx}">
+          <i class="fa-solid fa-calculator"></i>
+          ${t('plates.title')}
+        </div>
         <div class="action-sheet__item action-sheet__item--danger" data-action="remove-ex" data-ex-idx="${exIdx}">
           <i class="fa-solid fa-trash"></i>
           ${t('session.remove_exercise')}
@@ -1083,7 +1092,10 @@ export default class SessionOverlay {
       if (e.target === overlay) { this._closeModal(); return; }
       const target = e.target.closest('[data-action]');
       if (!target) return;
-      if (target.dataset.action === 'remove-ex') {
+      if (target.dataset.action === 'open-plate-calc') {
+        // Remplace le contenu du modal-overlay (et son onclick) par le calculateur
+        this._openPlateCalc(parseInt(target.dataset.exIdx, 10));
+      } else if (target.dataset.action === 'remove-ex') {
         const [removed] = this._session.exercises.splice(parseInt(target.dataset.exIdx), 1);
         // Si le repos en cours appartenait à cet exercice, l'arrêter
         if (removed && this._restEx === removed) this._stopRestTimerImmediate();
@@ -1096,6 +1108,143 @@ export default class SessionOverlay {
         this._closeModal();
       }
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Plate calculator — calculateur de disques par exercice
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Répartition gloutonne des disques PAR CÔTÉ pour charger `total` kg sur
+   * une barre de `bar` kg. Calcul en quarts de kg (entiers : 1.25 kg = 5)
+   * pour éviter les erreurs d'arrondi flottant.
+   *
+   * @returns {{perSide: {weight:number,count:number}[], achieved:number, exact:boolean}}
+   *   perSide  — disques par côté (poids décroissants)
+   *   achieved — poids total réellement chargeable (barre incluse)
+   *   exact    — true si `total` est atteignable exactement
+   */
+  _computePlates(total, bar) {
+    const barQ   = Math.round(bar * 4);
+    const totalQ = Math.round(total * 4);
+    let remaining = Math.max(0, Math.floor((totalQ - barQ) / 2));
+    const perSide = [];
+    for (const plate of PLATE_SET) {
+      const plateQ = Math.round(plate * 4);
+      const count  = Math.floor(remaining / plateQ);
+      if (count > 0) {
+        perSide.push({ weight: plate, count });
+        remaining -= count * plateQ;
+      }
+    }
+    const loadedQ  = perSide.reduce((sum, p) => sum + p.count * Math.round(p.weight * 4) * 2, barQ);
+    const achieved = loadedQ / 4;
+    return { perSide, achieved, exact: achieved === total };
+  }
+
+  /**
+   * HTML du résultat : badges « n × p kg » par côté + mention si le poids
+   * demandé n'est pas atteignable exactement. Uniquement des nombres et des
+   * chaînes de locale — aucun texte utilisateur.
+   */
+  _buildPlateCalcResult(total, bar) {
+    if (!(total > 0)) {
+      return `<span class="plate-calc__placeholder">—</span>`;
+    }
+    const { perSide, achieved, exact } = this._computePlates(total, bar);
+    const badges = perSide.length
+      ? perSide.map(p => `<span class="plate-calc__badge">${p.count} × ${p.weight} kg</span>`).join('')
+      : `<span class="plate-calc__badge plate-calc__badge--empty">${t('plates.empty_bar')}</span>`;
+    const note = exact
+      ? ''
+      : `<p class="plate-calc__note">${t('plates.unreachable', { w: achieved })}</p>`;
+    return `<div class="plate-calc__badges">${badges}</div>${note}`;
+  }
+
+  _openPlateCalc(exIdx) {
+    const ex = this._session?.exercises[exIdx];
+
+    // Préremplissage : poids de la dernière série renseignée (non-timer)
+    let prefill = 0;
+    if (ex) {
+      for (let i = ex.sets.length - 1; i >= 0; i--) {
+        const s = ex.sets[i];
+        if (s.type !== 'timer' && s.weight > 0) { prefill = s.weight; break; }
+      }
+    }
+
+    // Barre persistée : profile.settings.plateCalc.barWeight (défensif si absent)
+    let barWeight = parseFloat(this._settings?.plateCalc?.barWeight);
+    if (!BAR_OPTIONS.includes(barWeight)) barWeight = 20;
+
+    const overlay = document.getElementById('modal-overlay');
+    const barsHtml = BAR_OPTIONS.map(w => `
+      <button class="plate-calc__bar${w === barWeight ? ' plate-calc__bar--active' : ''}"
+              data-action="plate-bar" data-bar="${w}">${w} kg</button>`).join('');
+
+    overlay.innerHTML = `
+      <div class="modal plate-calc">
+        <div class="modal__handle"></div>
+        <div class="plate-calc__header">
+          <h2 class="plate-calc__title">${t('plates.title')}</h2>
+          <button class="btn btn--icon" data-action="close-plate-calc" aria-label="Fermer">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="plate-calc__body">
+          <label class="plate-calc__label" for="plate-calc-weight">${t('plates.total')}</label>
+          <input class="plate-calc__input" id="plate-calc-weight"
+                 type="number" min="0" step="0.5" inputmode="decimal"
+                 placeholder="—" value="${prefill > 0 ? prefill : ''}">
+          <span class="plate-calc__label">${t('plates.bar')}</span>
+          <div class="plate-calc__bars">${barsHtml}</div>
+          <span class="plate-calc__label">${t('plates.per_side')}</span>
+          <div class="plate-calc__result" id="plate-calc-result"></div>
+        </div>
+      </div>`;
+    overlay.classList.remove('hidden');
+
+    // Recalcul en direct — l'input vit dans le modal-overlay et disparaît
+    // avec lui (_closeModal vide innerHTML) : aucun listener persistant.
+    const update = () => {
+      const resultEl = document.getElementById('plate-calc-result');
+      if (!resultEl) return;
+      const total = Math.max(0, parseFloat(document.getElementById('plate-calc-weight')?.value) || 0);
+      resultEl.innerHTML = this._buildPlateCalcResult(total, barWeight);
+    };
+    update();
+    overlay.querySelector('#plate-calc-weight')?.addEventListener('input', update);
+
+    overlay.onclick = (e) => {
+      if (e.target === overlay) { this._closeModal(); return; }
+      const target = e.target.closest('[data-action]');
+      if (!target) return;
+      if (target.dataset.action === 'close-plate-calc') {
+        this._closeModal();
+      } else if (target.dataset.action === 'plate-bar') {
+        const w = parseFloat(target.dataset.bar);
+        if (!BAR_OPTIONS.includes(w)) return;
+        barWeight = w;
+        overlay.querySelectorAll('.plate-calc__bar').forEach(btn => {
+          btn.classList.toggle('plate-calc__bar--active', parseFloat(btn.dataset.bar) === w);
+        });
+        update();
+        this._savePlateCalcBar(w);
+      }
+    };
+  }
+
+  /** Persiste le choix de barre dans profile.settings.plateCalc.barWeight. */
+  _savePlateCalcBar(weight) {
+    this._settings.plateCalc = { ...(this._settings.plateCalc || {}), barWeight: weight };
+    dbGetProfile()
+      .then(profile => {
+        if (!profile) return;
+        profile.settings = profile.settings || {};
+        profile.settings.plateCalc = { ...(profile.settings.plateCalc || {}), barWeight: weight };
+        return dbSaveProfile(profile);
+      })
+      .catch(() => { /* persistance non bloquante */ });
   }
 
   // ---------------------------------------------------------------------------

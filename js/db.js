@@ -420,6 +420,9 @@ export async function initDB() {
           simpleTimers: false,
           defaultSeconds: 90,
         },
+        plateCalc: {
+          barWeight: 20,
+        },
       },
       dashboardWidgets: [
         { id: 'weekly_workouts', config: {} },

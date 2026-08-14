@@ -60,6 +60,9 @@ export default {
   'widget.workouts_this_week':     '{n} workout(s) this week',
   'widget.no_data':                'No data yet',
 
+  /* ── Charts ── */
+  'chart.progress_aria':           'Progress chart',
+
   /* ── History page ── */
   'history.title':             'History',
   'history.empty':             'No workouts recorded',
@@ -125,6 +128,14 @@ export default {
   'session.resumed':           'Workout resumed',
   'session.incomplete_sets_prompt': 'Some sets are incomplete. Keep them?',
   'session.routine_empty':     'This routine has no valid exercises',
+
+  /* ── Plate calculator ── */
+  'plates.title':              'Plate calculator',
+  'plates.bar':                'Bar',
+  'plates.per_side':           'Per side',
+  'plates.total':              'Total weight (kg)',
+  'plates.unreachable':        'Loadable: {w} kg',
+  'plates.empty_bar':          'Bar only',
 
   /* ── Exercises page ── */
   'exercises.title':           'Exercises',

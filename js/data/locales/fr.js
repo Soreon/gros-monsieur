@@ -60,6 +60,9 @@ export default {
   'widget.workouts_this_week':     '{n} entraînement(s) cette semaine',
   'widget.no_data':                'Pas encore de données',
 
+  /* ── Graphiques ── */
+  'chart.progress_aria':           'Graphique de progression',
+
   /* ── Page Historique ── */
   'history.title':             'Historique',
   'history.empty':             'Aucun entraînement enregistré',
@@ -125,6 +128,14 @@ export default {
   'session.resumed':           'Séance en cours reprise',
   'session.incomplete_sets_prompt': 'Des séries ne sont pas complétées. Les conserver ?',
   'session.routine_empty':     'Cette routine ne contient aucun exercice valide',
+
+  /* ── Calculateur de disques ── */
+  'plates.title':              'Calculateur de disques',
+  'plates.bar':                'Barre',
+  'plates.per_side':           'Par côté',
+  'plates.total':              'Poids total (kg)',
+  'plates.unreachable':        'Charge possible : {w} kg',
+  'plates.empty_bar':          'Barre seule',
 
   /* ── Page Exercices ── */
   'exercises.title':           'Exercices',
