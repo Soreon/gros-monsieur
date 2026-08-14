@@ -43,12 +43,10 @@ const PRECACHE_ASSETS = [
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
   './assets/icons/icon-maskable-512.png',
-  // Font Awesome Pro (local)
-  './assets/fontawesome/css/fontawesome.min.css',
-  './assets/fontawesome/css/solid.min.css',
-  './assets/fontawesome/css/regular.min.css',
-  './assets/fontawesome/webfonts/fa-solid-900.woff2',
-  './assets/fontawesome/webfonts/fa-regular-400.woff2',
+  // Font Awesome Pro (local, sous-ensemble — régénérer via tools/subset-fontawesome.mjs)
+  './assets/fontawesome/css/fa-subset.min.css',
+  './assets/fontawesome/webfonts/fa-solid-900.subset.woff2',
+  './assets/fontawesome/webfonts/fa-regular-400.subset.woff2',
 ];
 
 // ── Installation : mise en cache du shell ──────────────────────

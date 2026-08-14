@@ -1,0 +1,56 @@
+/*! Sous-ensemble Font Awesome Pro 7.2.0 (https://fontawesome.com) — genere par tools/subset-fontawesome.mjs. License Commerciale - https://fontawesome.com/license */
+:host,:root{--fa-family-classic:"Font Awesome 7 Pro";--fa-font-solid:normal 900 1em/1 var(--fa-family-classic);--fa-font-regular:normal 400 1em/1 var(--fa-family-classic);--fa-style-family-classic:var(--fa-family-classic)}
+@font-face{font-family:"Font Awesome 7 Pro";font-style:normal;font-weight:900;font-display:block;src:url(../webfonts/fa-solid-900.subset.woff2) format("woff2")}
+@font-face{font-family:"Font Awesome 7 Pro";font-style:normal;font-weight:400;font-display:block;src:url(../webfonts/fa-regular-400.subset.woff2) format("woff2")}
+.fa,.fa-solid,.fa-regular,.fa-classic{--_fa-family:var(--fa-family,var(--fa-style-family,"Font Awesome 7 Pro"));-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;display:var(--fa-display,inline-block);font-family:var(--_fa-family);font-feature-settings:normal;font-style:normal;font-synthesis:none;font-variant:normal;font-weight:var(--fa-style,900);line-height:1;text-align:center;text-rendering:auto;width:var(--fa-width,1.25em)}
+:is(.fa,.fa-solid,.fa-regular,.fa-classic):before{content:var(--fa)/""}
+@supports not (content:""/""){:is(.fa,.fa-solid,.fa-regular,.fa-classic):before{content:var(--fa)}}
+.fa-solid{--fa-style:900}
+.fa-regular{--fa-style:400}
+.fa-lg{font-size:1.25em;line-height:.05em;vertical-align:-.075em}
+.fa-apple-whole{--fa:"\f5d1"}
+.fa-arrow-down{--fa:"\f063"}
+.fa-arrow-left{--fa:"\f060"}
+.fa-arrow-up-arrow-down{--fa:"\e099"}
+.fa-arrow-up-from-bracket{--fa:"\e09a"}
+.fa-bolt{--fa:"\f0e7"}
+.fa-box-archive{--fa:"\f187"}
+.fa-calculator{--fa:"\f1ec"}
+.fa-chart-line{--fa:"\f201"}
+.fa-check{--fa:"\f00c"}
+.fa-chevron-down{--fa:"\f078"}
+.fa-chevron-left{--fa:"\f053"}
+.fa-chevron-right{--fa:"\f054"}
+.fa-circle{--fa:"\f111"}
+.fa-circle-check{--fa:"\f058"}
+.fa-circle-question{--fa:"\f059"}
+.fa-clock{--fa:"\f017"}
+.fa-clock-rotate-left{--fa:"\f1da"}
+.fa-copy{--fa:"\f0c5"}
+.fa-droplet{--fa:"\f043"}
+.fa-dumbbell{--fa:"\f44b"}
+.fa-ellipsis-vertical{--fa:"\f142"}
+.fa-file-export{--fa:"\f56e"}
+.fa-file-import{--fa:"\f56f"}
+.fa-fire{--fa:"\f06d"}
+.fa-gear{--fa:"\f013"}
+.fa-grip-lines{--fa:"\f7a4"}
+.fa-list{--fa:"\f03a"}
+.fa-magnifying-glass{--fa:"\f002"}
+.fa-mobile-screen{--fa:"\f3cf"}
+.fa-pen{--fa:"\f304"}
+.fa-plus{--fa:"\2b"}
+.fa-rotate-right{--fa:"\f2f9"}
+.fa-ruler-horizontal{--fa:"\f547"}
+.fa-ruler-vertical{--fa:"\f548"}
+.fa-sliders{--fa:"\f1de"}
+.fa-star{--fa:"\f005"}
+.fa-stop{--fa:"\f04d"}
+.fa-stopwatch{--fa:"\f2f2"}
+.fa-trash{--fa:"\f1f8"}
+.fa-triangle-exclamation{--fa:"\f071"}
+.fa-trophy{--fa:"\f091"}
+.fa-user{--fa:"\f007"}
+.fa-weight-hanging{--fa:"\f5cd"}
+.fa-weight-scale{--fa:"\f496"}
+.fa-xmark{--fa:"\f00d"}
