@@ -129,9 +129,8 @@ export default {
   'session.resumed':           'Séance en cours reprise',
   'session.incomplete_sets_prompt': 'Des séries ne sont pas complétées. Les conserver ?',
   'session.routine_empty':     'Cette routine ne contient aucun exercice valide',
-  'session.android_timer':     'Minuteur Android (test)',
-  'session.android_timer_label': 'Repos — Gros Monsieur',
-  'session.android_timer_blocked': 'Intent bloqué par le navigateur',
+  'session.rest_done_title':   'Repos terminé',
+  'session.rest_done_body':    'C\'est reparti ! 💪',
 
   /* ── Calculateur de disques ── */
   'plates.title':              'Calculateur de disques',

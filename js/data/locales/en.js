@@ -129,9 +129,8 @@ export default {
   'session.resumed':           'Workout resumed',
   'session.incomplete_sets_prompt': 'Some sets are incomplete. Keep them?',
   'session.routine_empty':     'This routine has no valid exercises',
-  'session.android_timer':     'Android timer (test)',
-  'session.android_timer_label': 'Rest — Gros Monsieur',
-  'session.android_timer_blocked': 'Intent blocked by the browser',
+  'session.rest_done_title':   'Rest over',
+  'session.rest_done_body':    'Back to work! 💪',
 
   /* ── Plate calculator ── */
   'plates.title':              'Plate calculator',

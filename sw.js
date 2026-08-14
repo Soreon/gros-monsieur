@@ -4,7 +4,7 @@
  * Le shell et Font Awesome Pro sont mis en cache dès l'installation.
  */
 
-const CACHE_VERSION = 'gm-v22';
+const CACHE_VERSION = 'gm-v23';
 
 // Assets à mettre en cache lors de l'installation (app shell)
 const PRECACHE_ASSETS = [
@@ -110,5 +110,17 @@ self.addEventListener('fetch', event => {
             }
           });
       })
+  );
+});
+
+// ── Notification de fin de minuteur : un tap ramène dans l'app ─────────────
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const client = list.find(c => 'focus' in c);
+      if (client) return client.focus();
+      return self.clients.openWindow('./');
+    })
   );
 });

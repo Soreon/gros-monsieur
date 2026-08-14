@@ -869,11 +869,6 @@ export default class SessionOverlay {
         document.getElementById('session-timer-modal')?.remove();
         break;
 
-      case 'android-timer': {
-        const secs = parseInt(target.dataset.seconds, 10);
-        if (!isNaN(secs) && secs > 0) this._openAndroidTimer(secs);
-        break;
-      }
 
       case 'timer-preset': {
         const secs = parseInt(target.dataset.seconds, 10);
@@ -1964,6 +1959,7 @@ export default class SessionOverlay {
   // ---------------------------------------------------------------------------
 
   _startGlobalTimer(seconds) {
+    this._requestNotifyPermission();
     if (this._globalInterval) {
       clearInterval(this._globalInterval);
       this._globalInterval = null;
@@ -2002,6 +1998,7 @@ export default class SessionOverlay {
       this._updateTimerBtn();
       navigator.vibrate?.([200, 100, 200]);
       this._playBeep(2);
+      this._notifyTimerDone();
       document.getElementById('session-timer-modal')?.classList.add('timer-modal--done');
       clearTimeout(this._globalDoneTimeout);
       this._globalDoneTimeout = setTimeout(() => {
@@ -2041,33 +2038,31 @@ export default class SessionOverlay {
   }
 
   /**
-   * EXPÉRIMENTAL — Minuteur système Android via une URL intent: (Chrome
-   * lance l'intent ACTION_SET_TIMER de l'app Horloge ; nécessite que le
-   * navigateur détienne la permission SET_ALARM, non garanti). SKIP_UI=false
-   * pour un résultat visible : l'Horloge s'ouvre préremplie. Si la page est
-   * toujours visible après 2 s, l'intent a probablement été bloqué.
+   * Notification de fin de minuteur (plan B après l'échec de l'intent
+   * Android ACTION_SET_TIMER, bloqué par Chrome pour les pages web).
+   * Ne s'affiche que si l'app est en arrière-plan : au premier plan, le
+   * bip/vibration existants suffisent. Passe par le Service Worker
+   * (obligatoire sur Chrome Android, `new Notification()` y est interdit).
    */
-  _openAndroidTimer(seconds) {
-    const s   = Math.max(1, Math.round(seconds));
-    const msg = encodeURIComponent(t('session.android_timer_label'));
-    const url = `intent:#Intent;action=android.intent.action.SET_TIMER;` +
-      `i.android.intent.extra.alarm.LENGTH=${s};` +
-      `S.android.intent.extra.alarm.MESSAGE=${msg};` +
-      `B.android.intent.extra.alarm.SKIP_UI=false;end`;
-    location.href = url;
-    setTimeout(() => {
-      if (!document.hidden) this._showToast(t('session.android_timer_blocked'), 'error');
-    }, 2000);
+  _notifyTimerDone() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted' || !document.hidden) return;
+    navigator.serviceWorker?.ready
+      .then((reg) => reg.showNotification(t('session.rest_done_title'), {
+        body: t('session.rest_done_body'),
+        icon: './assets/icons/icon-192.png',
+        badge: './assets/icons/icon-monochrome-512.png',
+        vibrate: [200, 100, 200],
+        tag: 'gm-timer-done',
+      }))
+      .catch(() => { /* notification impossible : bip/vibration restent */ });
   }
 
-  /** Bouton « Minuteur Android » — rendu uniquement sur Android. */
-  _androidTimerBtnHtml(seconds) {
-    if (!/android/i.test(navigator.userAgent)) return '';
-    return `
-      <button class="timer-modal__android" data-action="android-timer" data-seconds="${Math.round(seconds)}">
-        <i class="fa-solid fa-mobile-screen"></i>
-        ${t('session.android_timer')}
-      </button>`;
+  /** Demande la permission de notifier au premier lancement d'un minuteur. */
+  _requestNotifyPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
   }
 
   _buildTimerModalIdle() {
@@ -2089,8 +2084,7 @@ export default class SessionOverlay {
           <button class="timer-modal__preset" data-action="timer-preset" data-seconds="240">4:00</button>
         </div>
       </div>
-      <button class="timer-modal__custom-btn" data-action="timer-custom">CRÉER UN MINUTEUR PERSONNALISÉ</button>
-      ${this._androidTimerBtnHtml(this._restDuration)}`;
+      <button class="timer-modal__custom-btn" data-action="timer-custom">CRÉER UN MINUTEUR PERSONNALISÉ</button>`;
   }
 
   _buildTimerModalRunning() {
@@ -2121,8 +2115,7 @@ export default class SessionOverlay {
         <button class="timer-modal__adj" data-action="timer-adjust" data-delta="-30">- 30 S</button>
         <button class="timer-modal__adj" data-action="timer-adjust" data-delta="30">+ 30 S</button>
         <button class="timer-modal__skip" data-action="timer-skip">IGNORER</button>
-      </div>
-      ${this._androidTimerBtnHtml(this._globalRemaining)}`;
+      </div>`;
   }
 
   _updateGlobalTimerModal() {
@@ -2144,6 +2137,7 @@ export default class SessionOverlay {
   // ---------------------------------------------------------------------------
 
   _startRestTimer(seconds, exIdx, si = null) {
+    this._requestNotifyPermission();
     this._stopRestTimerImmediate();
     // Références d'objets (pas d'index bruts) : insensibles aux splice /
     // réordonnancements survenant pendant le repos.
@@ -2210,6 +2204,7 @@ export default class SessionOverlay {
       this._updateRestTimerDisplay();
       navigator.vibrate?.([200, 100, 200]);
       this._playBeep(2);
+      this._notifyTimerDone();
 
       // Mark the timer set as completed (référence directe, index-safe)
       if (this._restSet?.type === 'timer') {
