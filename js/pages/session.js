@@ -869,6 +869,12 @@ export default class SessionOverlay {
         document.getElementById('session-timer-modal')?.remove();
         break;
 
+      case 'android-timer': {
+        const secs = parseInt(target.dataset.seconds, 10);
+        if (!isNaN(secs) && secs > 0) this._openAndroidTimer(secs);
+        break;
+      }
+
       case 'timer-preset': {
         const secs = parseInt(target.dataset.seconds, 10);
         if (!isNaN(secs)) {
@@ -2034,6 +2040,36 @@ export default class SessionOverlay {
     this._overlay.appendChild(modal);
   }
 
+  /**
+   * EXPÉRIMENTAL — Minuteur système Android via une URL intent: (Chrome
+   * lance l'intent ACTION_SET_TIMER de l'app Horloge ; nécessite que le
+   * navigateur détienne la permission SET_ALARM, non garanti). SKIP_UI=false
+   * pour un résultat visible : l'Horloge s'ouvre préremplie. Si la page est
+   * toujours visible après 2 s, l'intent a probablement été bloqué.
+   */
+  _openAndroidTimer(seconds) {
+    const s   = Math.max(1, Math.round(seconds));
+    const msg = encodeURIComponent(t('session.android_timer_label'));
+    const url = `intent:#Intent;action=android.intent.action.SET_TIMER;` +
+      `i.android.intent.extra.alarm.LENGTH=${s};` +
+      `S.android.intent.extra.alarm.MESSAGE=${msg};` +
+      `B.android.intent.extra.alarm.SKIP_UI=false;end`;
+    location.href = url;
+    setTimeout(() => {
+      if (!document.hidden) this._showToast(t('session.android_timer_blocked'), 'error');
+    }, 2000);
+  }
+
+  /** Bouton « Minuteur Android » — rendu uniquement sur Android. */
+  _androidTimerBtnHtml(seconds) {
+    if (!/android/i.test(navigator.userAgent)) return '';
+    return `
+      <button class="timer-modal__android" data-action="android-timer" data-seconds="${Math.round(seconds)}">
+        <i class="fa-solid fa-mobile-screen"></i>
+        ${t('session.android_timer')}
+      </button>`;
+  }
+
   _buildTimerModalIdle() {
     return `
       <div class="timer-modal__header">
@@ -2053,7 +2089,8 @@ export default class SessionOverlay {
           <button class="timer-modal__preset" data-action="timer-preset" data-seconds="240">4:00</button>
         </div>
       </div>
-      <button class="timer-modal__custom-btn" data-action="timer-custom">CRÉER UN MINUTEUR PERSONNALISÉ</button>`;
+      <button class="timer-modal__custom-btn" data-action="timer-custom">CRÉER UN MINUTEUR PERSONNALISÉ</button>
+      ${this._androidTimerBtnHtml(this._restDuration)}`;
   }
 
   _buildTimerModalRunning() {
@@ -2084,7 +2121,8 @@ export default class SessionOverlay {
         <button class="timer-modal__adj" data-action="timer-adjust" data-delta="-30">- 30 S</button>
         <button class="timer-modal__adj" data-action="timer-adjust" data-delta="30">+ 30 S</button>
         <button class="timer-modal__skip" data-action="timer-skip">IGNORER</button>
-      </div>`;
+      </div>
+      ${this._androidTimerBtnHtml(this._globalRemaining)}`;
   }
 
   _updateGlobalTimerModal() {
