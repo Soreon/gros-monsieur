@@ -445,8 +445,10 @@ export default class HistoriquePage {
 
     return `
       <div class="hist-exercise">
-        <p class="hist-exercise__name">${escapeHtml(exercise.exerciseName)}</p>
-        ${bestSetHtml}
+        <div class="hist-exercise__header">
+          <p class="hist-exercise__name">${escapeHtml(exercise.exerciseName)}</p>
+          ${bestSetHtml}
+        </div>
         ${noteHtml}
         <div class="hist-sets">
           ${setsHtml}
@@ -456,7 +458,12 @@ export default class HistoriquePage {
 
   _setRowHtml(set) {
     const abbr       = setTypeAbbr(set.type);
-    const valueStr   = `${escapeHtml(String(set.weight))} kg × ${escapeHtml(String(set.reps))}`;
+    // Série à durée (ex. gainage importé de Strong) : pas de poids/réps,
+    // on affiche la durée plutôt qu'un « 0 kg × 0 » trompeur.
+    const isDuration = !(set.weight > 0) && !(set.reps > 0) && set.duration > 0;
+    const valueStr   = isDuration
+      ? `${escapeHtml(String(set.duration))} s`
+      : `${escapeHtml(String(set.weight))} kg × ${escapeHtml(String(set.reps))}`;
     const incomplete = !set.completed ? ' hist-set-row--incomplete' : '';
 
     // Mark icon

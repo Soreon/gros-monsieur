@@ -367,6 +367,15 @@
   flex-shrink: 0;
 }
 
+/* Note d'exercice (importée ou saisie en séance) */
+.hist-exercise__note {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs);
+  font-style: italic;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
 
 /* ============================================================
    6. TABLEAU DES SERIES (.hist-sets)
