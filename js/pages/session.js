@@ -263,6 +263,10 @@ export default class SessionOverlay {
 
     this._render();
     if (this._restInterval) this._insertRestTimerBar();
+    if (this._pendingModalOpen) {
+      this._pendingModalOpen = false;
+      this._showTimerModal();
+    }
     this._minimize();
     this._showToast(t('session.resumed'), 'success');
     return true;
@@ -327,6 +331,8 @@ export default class SessionOverlay {
       if (this._globalInterval && this._globalEndsAt > Date.now()) {
         state.global = { endsAt: this._globalEndsAt, total: this._globalTotal };
       }
+      // Modale plein écran ouverte : à restaurer telle quelle à la reprise
+      if (document.getElementById('session-timer-modal')) state.modalOpen = true;
       if (state.rest || state.global) {
         localStorage.setItem(TIMERS_KEY, JSON.stringify(state));
       } else {
@@ -373,6 +379,9 @@ export default class SessionOverlay {
       this._globalInterval  = setInterval(() => this._tickGlobalTimer(), 1000);
       this._nativeSchedule(NATIVE_NOTIF_GLOBAL, this._globalEndsAt);
     }
+
+    // La modale ne peut être recréée qu'après _render() (qui écrase l'overlay)
+    this._pendingModalOpen = !!saved.modalOpen && !!this._globalInterval;
 
     // Échéances passées pendant la fermeture : la notification a déjà sonné,
     // on repart proprement.
@@ -498,6 +507,7 @@ export default class SessionOverlay {
     if (timerEl) timerEl.textContent = display;
     const barTimerEl = document.getElementById('session-bar-timer');
     if (barTimerEl) barTimerEl.textContent = display;
+    this._updateBarCountdown();
   }
 
   // ---------------------------------------------------------------------------
@@ -547,8 +557,30 @@ export default class SessionOverlay {
   _renderBar() {
     this._bar.innerHTML = `
       <span class="session-bar__name">${escapeHtml(this._session.name)}</span>
+      <span class="session-bar__countdown" id="session-bar-countdown"></span>
       <span class="session-bar__timer" id="session-bar-timer">${this._formatElapsed(this._elapsed)}</span>`;
+    this._updateBarCountdown();
     // Note: bar click is handled by the constructor-bound listener on this._bar
+  }
+
+  /**
+   * Décompte du minuteur actif (global prioritaire, sinon repos) dans la barre
+   * réduite. Sans lui, un minuteur lancé puis l'app réduite ou relancée reste
+   * invisible : son décompte ne vit que dans l'overlay plein écran.
+   */
+  _updateBarCountdown() {
+    const el = document.getElementById('session-bar-countdown');
+    if (!el) return;
+    const secs = this._globalInterval ? this._globalRemaining
+               : this._restInterval   ? this._restRemaining
+               : null;
+    if (secs === null) {
+      el.textContent = '';
+      el.classList.remove('session-bar__countdown--visible');
+      return;
+    }
+    el.innerHTML = `<i class="fa-regular fa-stopwatch"></i> ${this._formatRestTime(secs)}`;
+    el.classList.add('session-bar__countdown--visible');
   }
 
   // ---------------------------------------------------------------------------
@@ -2123,6 +2155,7 @@ export default class SessionOverlay {
       btn.className = 'session__btn-timer';
       btn.innerHTML = `<i class="fa-regular fa-stopwatch fa-lg"></i>`;
     }
+    this._updateBarCountdown();
   }
 
   _showTimerModal() {

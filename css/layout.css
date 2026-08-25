@@ -167,6 +167,26 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Décompte du minuteur actif — masqué tant qu'aucun minuteur ne tourne */
+.session-bar__countdown {
+  display: none;
+}
+
+.session-bar__countdown--visible {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  margin-right: var(--space-3);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--on-accent) 20%, transparent);
+  color: var(--on-accent);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-semi);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Session overlay ── */
 .session-overlay {
   position: fixed;
