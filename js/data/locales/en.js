@@ -131,6 +131,9 @@ export default {
   'session.routine_empty':     'This routine has no valid exercises',
   'session.rest_done_title':   'Rest over',
   'session.rest_done_body':    'Back to work! 💪',
+  'session.chrono_rest_title': 'Resting',
+  'session.chrono_timer_title': 'Timer running',
+  'session.chrono_body':       'Tap to return to your workout',
 
   /* ── Plate calculator ── */
   'plates.title':              'Plate calculator',

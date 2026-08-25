@@ -131,6 +131,9 @@ export default {
   'session.routine_empty':     'Cette routine ne contient aucun exercice valide',
   'session.rest_done_title':   'Repos terminé',
   'session.rest_done_body':    'C\'est reparti ! 💪',
+  'session.chrono_rest_title': 'Repos en cours',
+  'session.chrono_timer_title': 'Minuteur en cours',
+  'session.chrono_body':       'Appuyez pour revenir à la séance',
 
   /* ── Calculateur de disques ── */
   'plates.title':              'Calculateur de disques',

@@ -388,6 +388,10 @@ export default class SessionOverlay {
     if (!this._restInterval && !this._globalInterval) {
       try { localStorage.removeItem(TIMERS_KEY); } catch { /* non bloquant */ }
     }
+    // Filet pour Android < 8 (pas de setTimeoutAfter) : retire une éventuelle
+    // notification à chronomètre restée affichée après une échéance manquée.
+    if (!this._restInterval)   this._nativeChronoHide(NATIVE_NOTIF_REST);
+    if (!this._globalInterval) this._nativeChronoHide(NATIVE_NOTIF_GLOBAL);
   }
 
   // ---------------------------------------------------------------------------
@@ -2128,6 +2132,7 @@ export default class SessionOverlay {
       navigator.vibrate?.([200, 100, 200]);
       this._playBeep(2);
       this._notifyTimerDone();
+      this._nativeChronoHide(NATIVE_NOTIF_GLOBAL);
       this._saveTimers();
       document.getElementById('session-timer-modal')?.classList.add('timer-modal--done');
       clearTimeout(this._globalDoneTimeout);
@@ -2200,11 +2205,39 @@ export default class SessionOverlay {
         }],
       }))
       .catch(() => { /* permission refusée : bip/vibration restent */ });
+    this._nativeChronoShow(id, endsAt);
   }
 
   /** Annule une notification système programmée (skip, stop, annulation). */
   _nativeCancel(id) {
     this._nativeNotifs()?.cancel({ notifications: [{ id }] }).catch(() => {});
+    this._nativeChronoHide(id);
+  }
+
+  /**
+   * Notification persistante à chronomètre décroissant (plugin natif maison).
+   * Android dessine lui-même la seconde qui tourne à partir de l'instant de
+   * fin : le décompte reste juste app tuée / écran éteint, et les surcouches
+   * « capsule » qui écoutent les notifications peuvent l'afficher.
+   * No-op hors coquille Capacitor.
+   */
+  _nativeChronoShow(id, endsAt) {
+    const tn = window.Capacitor?.Plugins?.TimerNotification;
+    if (!tn || !(endsAt > Date.now())) return;
+    const isRest = id === NATIVE_NOTIF_REST;
+    tn.show({
+      id: id + 100, // canal distinct de la notification d'échéance
+      endsAt,
+      title: isRest ? t('session.chrono_rest_title') : t('session.chrono_timer_title'),
+      body:  t('session.chrono_body'),
+    }).catch(() => { /* permission refusée : sans gravité */ });
+  }
+
+  /** Retire la notification à chronomètre. */
+  _nativeChronoHide(id) {
+    window.Capacitor?.Plugins?.TimerNotification
+      ?.hide({ id: id + 100 })
+      .catch(() => {});
   }
 
   _notifyTimerDone() {
@@ -2381,6 +2414,7 @@ export default class SessionOverlay {
       navigator.vibrate?.([200, 100, 200]);
       this._playBeep(2);
       this._notifyTimerDone();
+      this._nativeChronoHide(NATIVE_NOTIF_REST);
       this._saveTimers();
 
       // Mark the timer set as completed (référence directe, index-safe)

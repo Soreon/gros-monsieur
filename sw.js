@@ -4,7 +4,7 @@
  * Le shell et Font Awesome Pro sont mis en cache dès l'installation.
  */
 
-const CACHE_VERSION = 'gm-v26';
+const CACHE_VERSION = 'gm-v27';
 
 // Assets à mettre en cache lors de l'installation (app shell)
 const PRECACHE_ASSETS = [
