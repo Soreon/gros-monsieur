@@ -2226,18 +2226,25 @@ export default class SessionOverlay {
     if (!tn || !(endsAt > Date.now())) return;
     const isRest = id === NATIVE_NOTIF_REST;
     tn.show({
-      id: id + 100, // canal distinct de la notification d'échéance
       endsAt,
+      // Durée totale : sert la barre de progression, que les capsules
+      // dessinent en arc autour de l'icône.
+      totalSeconds: isRest ? this._restTotal : this._globalTotal,
       title: isRest ? t('session.chrono_rest_title') : t('session.chrono_timer_title'),
       body:  t('session.chrono_body'),
     }).catch(() => { /* permission refusée : sans gravité */ });
   }
 
-  /** Retire la notification à chronomètre. */
+  /**
+   * Retire le décompte persistant. Un seul service pour les deux minuteurs :
+   * on ne le coupe donc que si plus aucun des deux ne tourne.
+   */
   _nativeChronoHide(id) {
-    window.Capacitor?.Plugins?.TimerNotification
-      ?.hide({ id: id + 100 })
-      .catch(() => {});
+    const stillRunning = (id === NATIVE_NOTIF_REST)
+      ? !!this._globalInterval
+      : !!this._restInterval;
+    if (stillRunning) return;
+    window.Capacitor?.Plugins?.TimerNotification?.hide({}).catch(() => {});
   }
 
   _notifyTimerDone() {

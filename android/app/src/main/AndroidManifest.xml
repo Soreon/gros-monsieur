@@ -20,6 +20,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Décompte persistant du minuteur : un service de premier plan est
+             nécessaire pour que la notification porte le drapeau
+             FOREGROUND_SERVICE (reconnu par les capsules / Live Updates). -->
+        <service
+            android:name=".RestTimerService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Affichage du compte à rebours du minuteur de repos pendant une séance" />
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -34,4 +46,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Notification persistante du minuteur (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 </manifest>

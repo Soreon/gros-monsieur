@@ -1,15 +1,9 @@
 package com.soreon.grosmonsieur;
 
-import android.app.Notification;
-import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
-
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -17,124 +11,57 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
- * Notification persistante à chronomètre décroissant pour les minuteurs.
+ * Pont vers {@link RestTimerService} : affiche ou retire le décompte
+ * persistant du minuteur en cours.
  *
- * Le décompte n'est PAS dessiné par l'application : on fournit à Android
- * l'instant de fin (setWhen) et on active le chronomètre décroissant
- * (setUsesChronometer + setChronometerCountDown). C'est donc le système qui
- * anime la seconde qui tourne, y compris quand l'app est tuée ou l'écran
- * éteint — et c'est ce que les surcouches type « capsule » (MT Island, qui
- * est un NotificationListenerService) lisent pour afficher un minuteur.
- *
- * Complète, sans remplacer, la notification d'échéance de
- * @capacitor/local-notifications : celle-ci sonne à la fin, celle-là montre
- * le temps restant pendant tout le repos.
+ * L'affichage est confié à un service de premier plan, et non à une simple
+ * notification, parce que c'est le drapeau FOREGROUND_SERVICE que les
+ * surcouches « capsule » (MT Island) reconnaissent — constaté en inspectant
+ * la notification de Strong. Voir {@link RestTimerService} pour le détail.
  */
 @CapacitorPlugin(name = "TimerNotification")
 public class TimerNotification extends Plugin {
 
-    // L'importance d'un canal est figée à sa création : la changer impose un
-    // nouvel identifiant (l'ancien est supprimé pour ne pas polluer les
-    // réglages de l'utilisateur).
-    private static final String CHANNEL_ID = "gm_timer_running_v2";
-    private static final String CHANNEL_ID_LEGACY = "gm_timer_running";
+    /** Canaux des implémentations précédentes, supprimés au premier usage. */
+    private static final String[] LEGACY_CHANNELS = { "gm_timer_running", "gm_timer_running_v2" };
 
-    /**
-     * Canal muet mais d'importance DEFAULT : sans son ni vibration (réglés au
-     * niveau du canal), tout en gardant l'icône de barre d'état. Une
-     * importance LOW, ou un setSilent() sur la notification, la reléguerait
-     * dans la section « Silencieux » et lui retirerait son icône — donc
-     * invisible pour la barre d'état comme pour les surcouches « capsule ».
-     */
-    private void ensureChannel() {
+    private void dropLegacyChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
-        final int importance = NotificationManager.IMPORTANCE_DEFAULT;
         NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
-        nm.deleteNotificationChannel(CHANNEL_ID_LEGACY);
-        if (nm.getNotificationChannel(CHANNEL_ID) != null) return;
-        NotificationChannel channel = new NotificationChannel(
-            CHANNEL_ID,
-            "Minuteur en cours",
-            importance
-        );
-        channel.setDescription("Décompte du minuteur pendant la séance");
-        channel.setSound(null, null);
-        channel.enableVibration(false);
-        channel.setShowBadge(false);
-        nm.createNotificationChannel(channel);
+        for (String id : LEGACY_CHANNELS) {
+            nm.deleteNotificationChannel(id);
+        }
     }
 
     @PluginMethod
     public void show(PluginCall call) {
-        Integer id = call.getInt("id");
         Long endsAt = call.getLong("endsAt");
-        if (id == null || endsAt == null) {
-            call.reject("id et endsAt sont requis");
+        if (endsAt == null) {
+            call.reject("endsAt est requis");
             return;
         }
-        String title = call.getString("title", "Minuteur");
-        String body = call.getString("body", "");
+        dropLegacyChannels();
 
-        ensureChannel();
-
-        Intent intent = new Intent(getContext(), MainActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent contentIntent = PendingIntent.getActivity(
-            getContext(), id, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(getContext(), CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_timer)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setContentIntent(contentIntent)
-            // Le système dessine le décompte jusqu'à `endsAt`
-            .setWhen(endsAt)
-            .setUsesChronometer(true)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setSilent(false)
-            .setShowWhen(true)
-            .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT);
-
-        // Chronomètre décroissant : API 24+ (minSdk du projet), donc toujours vrai
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            builder.setChronometerCountDown(true);
-        }
-
-        // Auto-annulation à l'échéance par le système : indispensable si l'app
-        // est tuée avant la fin, sinon la notification persistante resterait
-        // affichée à zéro sans personne pour la retirer.
-        long remaining = endsAt - System.currentTimeMillis();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && remaining > 0) {
-            builder.setTimeoutAfter(remaining);
-        }
-
-        Notification notification = builder.build();
-        // Non balayable tant que le minuteur tourne
-        notification.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
-
+        Intent intent = new Intent(getContext(), RestTimerService.class);
+        intent.putExtra(RestTimerService.EXTRA_ENDS_AT, endsAt);
+        intent.putExtra(RestTimerService.EXTRA_TOTAL, call.getInt("totalSeconds", 0));
+        intent.putExtra(RestTimerService.EXTRA_TITLE, call.getString("title", "Minuteur"));
+        intent.putExtra(RestTimerService.EXTRA_BODY, call.getString("body", ""));
         try {
-            NotificationManagerCompat.from(getContext()).notify(id, notification);
+            getContext().startForegroundService(intent);
             call.resolve();
-        } catch (SecurityException e) {
-            // Permission POST_NOTIFICATIONS refusée : sans gravité, on n'affiche rien
+        } catch (Exception e) {
+            // Refus possible si l'app est en arrière-plan (restrictions
+            // Android 12+) : sans gravité, les minuteurs continuent sans
+            // notification persistante.
             call.resolve();
         }
     }
 
     @PluginMethod
     public void hide(PluginCall call) {
-        Integer id = call.getInt("id");
-        if (id == null) {
-            call.reject("id est requis");
-            return;
-        }
-        NotificationManagerCompat.from(getContext()).cancel(id);
+        getContext().stopService(new Intent(getContext(), RestTimerService.class));
         call.resolve();
     }
 }
