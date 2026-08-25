@@ -5,7 +5,7 @@
   "description": "PWA de suivi fitness — emballage Capacitor pour Android",
   "scripts": {
     "stage": "node tools/stage-www.mjs",
-    "android": "npm run stage && npx cap sync android && cd android && set \"JAVA_HOME=%USERPROFILE%\\android-tools\\jdk-21\" && gradlew assembleDebug"
+    "android": "npm run stage && npx cap sync android && cd android && set \"JAVA_HOME=%USERPROFILE%\\android-tools\\jdk-21\" && .\\gradlew.bat assembleDebug"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
