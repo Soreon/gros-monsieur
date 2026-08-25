@@ -33,17 +33,30 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "TimerNotification")
 public class TimerNotification extends Plugin {
 
-    private static final String CHANNEL_ID = "gm_timer_running";
+    // L'importance d'un canal est figée à sa création : la changer impose un
+    // nouvel identifiant (l'ancien est supprimé pour ne pas polluer les
+    // réglages de l'utilisateur).
+    private static final String CHANNEL_ID = "gm_timer_running_v2";
+    private static final String CHANNEL_ID_LEGACY = "gm_timer_running";
 
-    /** Canal silencieux et discret : la notification informe, elle n'alerte pas. */
+    /**
+     * Canal muet mais d'importance DEFAULT : sans son ni vibration (réglés au
+     * niveau du canal), tout en gardant l'icône de barre d'état. Une
+     * importance LOW, ou un setSilent() sur la notification, la reléguerait
+     * dans la section « Silencieux » et lui retirerait son icône — donc
+     * invisible pour la barre d'état comme pour les surcouches « capsule ».
+     */
     private void ensureChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        final int importance = NotificationManager.IMPORTANCE_DEFAULT;
         NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm == null || nm.getNotificationChannel(CHANNEL_ID) != null) return;
+        if (nm == null) return;
+        nm.deleteNotificationChannel(CHANNEL_ID_LEGACY);
+        if (nm.getNotificationChannel(CHANNEL_ID) != null) return;
         NotificationChannel channel = new NotificationChannel(
             CHANNEL_ID,
             "Minuteur en cours",
-            NotificationManager.IMPORTANCE_LOW
+            importance
         );
         channel.setDescription("Décompte du minuteur pendant la séance");
         channel.setSound(null, null);
@@ -82,11 +95,11 @@ public class TimerNotification extends Plugin {
             .setUsesChronometer(true)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setSilent(true)
+            .setSilent(false)
             .setShowWhen(true)
             .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setPriority(NotificationCompat.PRIORITY_LOW);
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT);
 
         // Chronomètre décroissant : API 24+ (minSdk du projet), donc toujours vrai
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
