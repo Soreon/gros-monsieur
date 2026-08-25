@@ -211,8 +211,9 @@ async function init() {
     setTimeout(_showInstallBanner, 3000);
   }
 
-  // 7. Service Worker
-  if ('serviceWorker' in navigator) {
+  // 7. Service Worker — inutile dans la coquille Capacitor : les fichiers
+  // sont déjà locaux à l'APK, et un SW cache-first y compliquerait les MAJ.
+  if ('serviceWorker' in navigator && !window.Capacitor) {
     navigator.serviceWorker
       .register('./sw.js')
       .then(reg => console.log('[SW] Enregistré :', reg.scope))

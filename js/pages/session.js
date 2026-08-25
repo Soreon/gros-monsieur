@@ -24,6 +24,10 @@ import { openModal, closeModal } from '../components/modal.js';
 // Clé localStorage du brouillon de séance active (persistance anti-crash/refresh)
 const DRAFT_KEY = 'gm-active-session';
 
+// Ids des notifications système programmées (coquille Capacitor Android)
+const NATIVE_NOTIF_REST   = 1001;
+const NATIVE_NOTIF_GLOBAL = 1002;
+
 // Calculateur de disques : jeu standard de disques (kg, par côté, ordre
 // décroissant pour l'algorithme glouton) et barres proposées (kg)
 const PLATE_SET   = [25, 20, 15, 10, 5, 2.5, 1.25];
@@ -831,6 +835,7 @@ export default class SessionOverlay {
           if (el) el.classList.remove('session-rest-bar--done');
           this._restInterval = setInterval(() => this._tickRestTimer(), 1000);
         }
+        this._nativeSchedule(NATIVE_NOTIF_REST, this._restEndsAt);
         this._updateRestTimerDisplay();
         break;
       }
@@ -855,6 +860,7 @@ export default class SessionOverlay {
             document.getElementById('session-timer-modal')?.classList.remove('timer-modal--done');
             this._globalInterval = setInterval(() => this._tickGlobalTimer(), 1000);
           }
+          this._nativeSchedule(NATIVE_NOTIF_GLOBAL, this._globalEndsAt);
           this._updateGlobalTimerModal();
           this._updateTimerBtn();
         }
@@ -1971,6 +1977,7 @@ export default class SessionOverlay {
     this._globalEndsAt    = Date.now() + seconds * 1000;
     this._globalRemaining = seconds;
     this._globalInterval  = setInterval(() => this._tickGlobalTimer(), 1000);
+    this._nativeSchedule(NATIVE_NOTIF_GLOBAL, this._globalEndsAt);
     this._updateTimerBtn();
   }
 
@@ -1984,6 +1991,7 @@ export default class SessionOverlay {
     this._globalRemaining = 0;
     this._globalTotal     = 0;
     this._globalEndsAt    = 0;
+    this._nativeCancel(NATIVE_NOTIF_GLOBAL);
     document.getElementById('session-timer-modal')?.remove();
     this._updateTimerBtn();
   }
@@ -2044,7 +2052,41 @@ export default class SessionOverlay {
    * bip/vibration existants suffisent. Passe par le Service Worker
    * (obligatoire sur Chrome Android, `new Notification()` y est interdit).
    */
+  /** Plugin Capacitor LocalNotifications (coquille Android native), sinon null. */
+  _nativeNotifs() {
+    return window.Capacitor?.Plugins?.LocalNotifications ?? null;
+  }
+
+  /**
+   * Programme (ou reprogramme) la notification SYSTÈME de fin de minuteur.
+   * Contrairement à la notification web, elle est enregistrée auprès
+   * d'Android : elle sonne à l'heure dite même si l'app est tuée ou
+   * l'écran verrouillé. No-op hors coquille Capacitor.
+   */
+  _nativeSchedule(id, endsAt) {
+    const ln = this._nativeNotifs();
+    if (!ln || !(endsAt > Date.now())) return;
+    ln.cancel({ notifications: [{ id }] })
+      .catch(() => {})
+      .then(() => ln.schedule({
+        notifications: [{
+          id,
+          title: t('session.rest_done_title'),
+          body: t('session.rest_done_body'),
+          schedule: { at: new Date(endsAt), allowWhileIdle: true },
+        }],
+      }))
+      .catch(() => { /* permission refusée : bip/vibration restent */ });
+  }
+
+  /** Annule une notification système programmée (skip, stop, annulation). */
+  _nativeCancel(id) {
+    this._nativeNotifs()?.cancel({ notifications: [{ id }] }).catch(() => {});
+  }
+
   _notifyTimerDone() {
+    // Coquille native : la notification programmée par Android s'en charge.
+    if (window.Capacitor) return;
     if (!('Notification' in window)) return;
     if (Notification.permission !== 'granted' || !document.hidden) return;
     navigator.serviceWorker?.ready
@@ -2060,6 +2102,11 @@ export default class SessionOverlay {
 
   /** Demande la permission de notifier au premier lancement d'un minuteur. */
   _requestNotifyPermission() {
+    const ln = this._nativeNotifs();
+    if (ln) {
+      ln.requestPermissions().catch(() => {});
+      return;
+    }
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
     }
@@ -2147,6 +2194,7 @@ export default class SessionOverlay {
     this._restEndsAt    = Date.now() + seconds * 1000;
     this._restRemaining = seconds;
     this._restInterval  = setInterval(() => this._tickRestTimer(), 1000);
+    this._nativeSchedule(NATIVE_NOTIF_REST, this._restEndsAt);
     this._insertRestTimerBar();
   }
 
@@ -2169,6 +2217,7 @@ export default class SessionOverlay {
     }
     clearTimeout(this._restDoneTimeout);
     this._restDoneTimeout = null;
+    this._nativeCancel(NATIVE_NOTIF_REST);
     const { exIdx } = this._restIndices();
     this._restRemaining = 0;
     this._restTotal     = 0;
@@ -2187,6 +2236,7 @@ export default class SessionOverlay {
     }
     clearTimeout(this._restDoneTimeout);
     this._restDoneTimeout = null;
+    this._nativeCancel(NATIVE_NOTIF_REST);
     this._restRemaining = 0;
     this._restTotal     = 0;
     this._restEndsAt    = 0;

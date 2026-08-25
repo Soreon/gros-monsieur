@@ -1,0 +1,8 @@
+{
+  "appId": "com.soreon.grosmonsieur",
+  "appName": "Gros Monsieur",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#1c1f26"
+  }
+}

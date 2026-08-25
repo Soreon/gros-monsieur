@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Gros Monsieur</string>
+    <string name="title_activity_main">Gros Monsieur</string>
+    <string name="package_name">com.soreon.grosmonsieur</string>
+    <string name="custom_url_scheme">com.soreon.grosmonsieur</string>
+</resources>

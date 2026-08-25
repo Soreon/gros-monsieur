@@ -1,3 +1,7 @@
 .vscode/*
 .claude/*
 Capture.PNG
+node_modules/
+www/
+*.apk
+resources/.tmp*
