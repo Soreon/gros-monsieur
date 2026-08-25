@@ -944,23 +944,9 @@ export default class SessionOverlay {
         this._stopRestTimer();
         break;
 
-      case 'rest-add-time': {
-        clearTimeout(this._restDoneTimeout);
-        this._restDoneTimeout = null;
-        // Base timestamp : fin en cours si le timer tourne, sinon maintenant
-        this._restEndsAt    = (this._restInterval ? this._restEndsAt : Date.now()) + 60000;
-        this._restRemaining = Math.max(0, Math.ceil((this._restEndsAt - Date.now()) / 1000));
-        this._restTotal     = Math.max(this._restTotal, this._restRemaining);
-        if (!this._restInterval) {
-          const el = document.getElementById('session-rest-timer');
-          if (el) el.classList.remove('session-rest-bar--done');
-          this._restInterval = setInterval(() => this._tickRestTimer(), 1000);
-        }
-        this._nativeSchedule(NATIVE_NOTIF_REST, this._restEndsAt);
-        this._saveTimers();
-        this._updateRestTimerDisplay();
+      case 'rest-add-time':
+        this._addRestTime(60);
         break;
-      }
 
       // Global timer modal controls
       case 'timer-skip':
@@ -969,24 +955,7 @@ export default class SessionOverlay {
 
       case 'timer-adjust': {
         const delta = parseInt(target.dataset.delta, 10);
-        if (!isNaN(delta)) {
-          clearTimeout(this._globalDoneTimeout);
-          this._globalDoneTimeout = null;
-          const base = this._globalInterval
-            ? this._globalEndsAt
-            : Date.now() + this._globalRemaining * 1000;
-          this._globalEndsAt    = Math.max(Date.now() + 1000, base + delta * 1000);
-          this._globalRemaining = Math.max(1, Math.ceil((this._globalEndsAt - Date.now()) / 1000));
-          this._globalTotal     = Math.max(this._globalTotal, this._globalRemaining);
-          if (!this._globalInterval) {
-            document.getElementById('session-timer-modal')?.classList.remove('timer-modal--done');
-            this._globalInterval = setInterval(() => this._tickGlobalTimer(), 1000);
-          }
-          this._nativeSchedule(NATIVE_NOTIF_GLOBAL, this._globalEndsAt);
-          this._saveTimers();
-          this._updateGlobalTimerModal();
-          this._updateTimerBtn();
-        }
+        if (!isNaN(delta)) this._adjustGlobalTimer(delta);
         break;
       }
 
@@ -2225,14 +2194,41 @@ export default class SessionOverlay {
     const tn = window.Capacitor?.Plugins?.TimerNotification;
     if (!tn || !(endsAt > Date.now())) return;
     const isRest = id === NATIVE_NOTIF_REST;
+    this._bindNativeActions();
     tn.show({
       endsAt,
       // Durée totale : sert la barre de progression, que les capsules
       // dessinent en arc autour de l'icône.
       totalSeconds: isRest ? this._restTotal : this._globalTotal,
+      kind:  isRest ? 'rest' : 'global',
       title: isRest ? t('session.chrono_rest_title') : t('session.chrono_timer_title'),
       body:  t('session.chrono_body'),
+      skipLabel: t('session.chrono_skip'),
+      addLabel:  '+ 1:00',
     }).catch(() => { /* permission refusée : sans gravité */ });
+  }
+
+  /**
+   * Écoute les appuis sur les boutons de la notification (une seule fois).
+   * Ils empruntent les mêmes méthodes que les boutons de l'écran, pour que
+   * l'affichage et l'échéance restent d'un seul tenant.
+   */
+  _bindNativeActions() {
+    if (this._nativeActionsBound) return;
+    const tn = window.Capacitor?.Plugins?.TimerNotification;
+    if (!tn?.addListener) return;
+    this._nativeActionsBound = true;
+    tn.addListener('timerAction', (ev) => {
+      const isRest = ev?.kind !== 'global';
+      if (ev?.action === 'skip') {
+        if (isRest) this._stopRestTimer();
+        else        this._stopGlobalTimer();
+      } else if (ev?.action === 'add') {
+        const secs = Number(ev.seconds) || 60;
+        if (isRest) this._addRestTime(secs);
+        else        this._adjustGlobalTimer(secs);
+      }
+    });
   }
 
   /**
@@ -2360,6 +2356,51 @@ export default class SessionOverlay {
     this._nativeSchedule(NATIVE_NOTIF_REST, this._restEndsAt);
     this._saveTimers();
     this._insertRestTimerBar();
+  }
+
+  /**
+   * Allonge le repos (bouton +1:00 de la barre ou de la notification).
+   * @param {number} seconds à ajouter
+   */
+  _addRestTime(seconds) {
+    clearTimeout(this._restDoneTimeout);
+    this._restDoneTimeout = null;
+    // Base timestamp : fin en cours si le timer tourne, sinon maintenant
+    this._restEndsAt    = (this._restInterval ? this._restEndsAt : Date.now()) + seconds * 1000;
+    this._restRemaining = Math.max(0, Math.ceil((this._restEndsAt - Date.now()) / 1000));
+    this._restTotal     = Math.max(this._restTotal, this._restRemaining);
+    if (!this._restInterval) {
+      const el = document.getElementById('session-rest-timer');
+      if (el) el.classList.remove('session-rest-bar--done');
+      this._restInterval = setInterval(() => this._tickRestTimer(), 1000);
+    }
+    this._nativeSchedule(NATIVE_NOTIF_REST, this._restEndsAt);
+    this._saveTimers();
+    this._updateRestTimerDisplay();
+  }
+
+  /**
+   * Ajuste le minuteur global (boutons ±15 s de la modale, +1:00 de la
+   * notification). Le delta peut être négatif ; la fin reste future.
+   * @param {number} delta secondes à ajouter (négatif = retirer)
+   */
+  _adjustGlobalTimer(delta) {
+    clearTimeout(this._globalDoneTimeout);
+    this._globalDoneTimeout = null;
+    const base = this._globalInterval
+      ? this._globalEndsAt
+      : Date.now() + this._globalRemaining * 1000;
+    this._globalEndsAt    = Math.max(Date.now() + 1000, base + delta * 1000);
+    this._globalRemaining = Math.max(1, Math.ceil((this._globalEndsAt - Date.now()) / 1000));
+    this._globalTotal     = Math.max(this._globalTotal, this._globalRemaining);
+    if (!this._globalInterval) {
+      document.getElementById('session-timer-modal')?.classList.remove('timer-modal--done');
+      this._globalInterval = setInterval(() => this._tickGlobalTimer(), 1000);
+    }
+    this._nativeSchedule(NATIVE_NOTIF_GLOBAL, this._globalEndsAt);
+    this._saveTimers();
+    this._updateGlobalTimerModal();
+    this._updateTimerBtn();
   }
 
   /** Index courants (live) de l'exercice/set du repos. -1 si supprimés. */

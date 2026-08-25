@@ -134,6 +134,7 @@ export default {
   'session.chrono_rest_title': 'Resting',
   'session.chrono_timer_title': 'Timer running',
   'session.chrono_body':       'Tap to return to your workout',
+  'session.chrono_skip':       'Skip',
 
   /* ── Plate calculator ── */
   'plates.title':              'Plate calculator',

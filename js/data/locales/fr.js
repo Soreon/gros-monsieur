@@ -134,6 +134,7 @@ export default {
   'session.chrono_rest_title': 'Repos en cours',
   'session.chrono_timer_title': 'Minuteur en cours',
   'session.chrono_body':       'Appuyez pour revenir à la séance',
+  'session.chrono_skip':       'Ignorer',
 
   /* ── Calculateur de disques ── */
   'plates.title':              'Calculateur de disques',

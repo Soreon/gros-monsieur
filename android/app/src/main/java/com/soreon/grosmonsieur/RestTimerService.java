@@ -8,6 +8,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -32,10 +33,13 @@ import androidx.core.app.ServiceCompat;
  */
 public class RestTimerService extends Service {
 
-    public static final String EXTRA_ENDS_AT = "endsAt";
-    public static final String EXTRA_TOTAL   = "totalSeconds";
-    public static final String EXTRA_TITLE   = "title";
-    public static final String EXTRA_BODY    = "body";
+    public static final String EXTRA_ENDS_AT    = "endsAt";
+    public static final String EXTRA_TOTAL      = "totalSeconds";
+    public static final String EXTRA_TITLE      = "title";
+    public static final String EXTRA_BODY       = "body";
+    public static final String EXTRA_KIND       = "kind";
+    public static final String EXTRA_SKIP_LABEL = "skipLabel";
+    public static final String EXTRA_ADD_LABEL  = "addLabel";
 
     private static final String CHANNEL_ID = "gm_timer_fgs";
     private static final int    NOTIF_ID   = 1200;
@@ -46,6 +50,9 @@ public class RestTimerService extends Service {
     private int  totalSeconds;
     private String title = "Minuteur";
     private String body  = "";
+    private String kind      = "rest";
+    private String skipLabel = "Ignorer";
+    private String addLabel  = "+ 1:00";
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -64,6 +71,12 @@ public class RestTimerService extends Service {
         String b = intent.getStringExtra(EXTRA_BODY);
         if (t != null) title = t;
         if (b != null) body = b;
+        String k  = intent.getStringExtra(EXTRA_KIND);
+        String sl = intent.getStringExtra(EXTRA_SKIP_LABEL);
+        String al = intent.getStringExtra(EXTRA_ADD_LABEL);
+        if (k  != null) kind = k;
+        if (sl != null) skipLabel = sl;
+        if (al != null) addLabel = al;
 
         if (endsAt <= System.currentTimeMillis()) {
             stopNow();
@@ -188,9 +201,20 @@ public class RestTimerService extends Service {
             .setColorized(true)
             .setCategory(Notification.CATEGORY_STOPWATCH)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
-            .setProgress(total, elapsed, false);
+            .setProgress(total, elapsed, false)
+            .addAction(new Notification.Action.Builder(
+                Icon.createWithResource(this, R.drawable.ic_stat_timer),
+                addLabel, actionIntent("add", 60)).build())
+            .addAction(new Notification.Action.Builder(
+                Icon.createWithResource(this, R.drawable.ic_stat_timer),
+                skipLabel, actionIntent("skip", 0)).build());
 
         if (Build.VERSION.SDK_INT >= 36) {
+            // ProgressStyle : style attendu par les « Live Updates ». Un simple
+            // setProgress ne suffit pas à rendre la notification éligible.
+            builder.setStyle(new Notification.ProgressStyle()
+                .addProgressSegment(new Notification.ProgressStyle.Segment(total))
+                .setProgress(elapsed));
             builder.setShortCriticalText(formatRemaining(remaining));
             // Absente du SDK 36 contre lequel on compile, présente à
             // l'exécution sur Android 16+ : appel par réflexion.
@@ -231,6 +255,25 @@ public class RestTimerService extends Service {
         Notification notification = builder.build();
         notification.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
         return notification;
+    }
+
+    /**
+     * PendingIntent d'un bouton de la notification. Le code de requête dépend
+     * de l'action et du minuteur : deux boutons distincts ne doivent pas
+     * partager le même PendingIntent, sinon le second écrase les extras du
+     * premier.
+     */
+    private PendingIntent actionIntent(String what, int seconds) {
+        Intent intent = new Intent(this, TimerActionReceiver.class);
+        intent.setAction(TimerActionReceiver.ACTION + "." + what);
+        intent.putExtra(TimerActionReceiver.EXTRA_WHAT, what);
+        intent.putExtra(TimerActionReceiver.EXTRA_KIND, kind);
+        intent.putExtra(TimerActionReceiver.EXTRA_AMOUNT, seconds);
+        int requestCode = NOTIF_ID + what.hashCode();
+        return PendingIntent.getBroadcast(
+            this, requestCode, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
     }
 
     /** « 2:04 » */
