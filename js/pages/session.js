@@ -23,6 +23,10 @@ import { openModal, closeModal } from '../components/modal.js';
 
 // Clé localStorage du brouillon de séance active (persistance anti-crash/refresh)
 const DRAFT_KEY = 'gm-active-session';
+// État des minuteurs en cours (repos + global), persisté séparément du
+// brouillon : l'objet séance est sauvé tel quel en base à la fin, il ne
+// doit pas transporter d'état éphémère.
+const TIMERS_KEY = 'gm-active-timers';
 
 // Ids des notifications système programmées (coquille Capacitor Android)
 const NATIVE_NOTIF_REST   = 1001;
@@ -254,7 +258,11 @@ export default class SessionOverlay {
     this._syncElapsed();
     this._startTimer();
 
+    // Minuteurs (repos / global) : relancés depuis leurs timestamps persistés
+    this._resumeTimers();
+
     this._render();
+    if (this._restInterval) this._insertRestTimerBar();
     this._minimize();
     this._showToast(t('session.resumed'), 'success');
     return true;
@@ -293,7 +301,84 @@ export default class SessionOverlay {
     this._draftTimeout = null;
     try {
       localStorage.removeItem(DRAFT_KEY);
+      localStorage.removeItem(TIMERS_KEY);
     } catch { /* non bloquant */ }
+  }
+
+  /**
+   * Snapshot des minuteurs actifs (repos + global) dans localStorage.
+   * Appelé à chaque démarrage / ajustement / arrêt : à la reprise du
+   * brouillon, les décomptes réapparaissent au lieu d'être perdus
+   * (la notification système native, elle, survivait déjà).
+   */
+  _saveTimers() {
+    try {
+      const state = {};
+      if (this._restInterval && this._restEndsAt > Date.now()) {
+        const { exIdx, si } = this._restIndices();
+        state.rest = {
+          endsAt: this._restEndsAt,
+          total:  this._restTotal,
+          exIdx,
+          si,
+          exId:   this._restEx?.exerciseId ?? null,
+        };
+      }
+      if (this._globalInterval && this._globalEndsAt > Date.now()) {
+        state.global = { endsAt: this._globalEndsAt, total: this._globalTotal };
+      }
+      if (state.rest || state.global) {
+        localStorage.setItem(TIMERS_KEY, JSON.stringify(state));
+      } else {
+        localStorage.removeItem(TIMERS_KEY);
+      }
+    } catch { /* quota / private mode — non bloquant */ }
+  }
+
+  /**
+   * Relance les minuteurs sauvegardés si leur échéance n'est pas passée.
+   * Appelé par resumeDraft() AVANT _render() : le bouton chrono global lit
+   * _globalInterval au rendu ; la barre de repos est réinsérée après.
+   */
+  _resumeTimers() {
+    let saved = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(TIMERS_KEY) || 'null');
+    } catch { saved = null; }
+    if (!saved) return;
+    const now = Date.now();
+
+    if (saved.rest?.endsAt > now) {
+      // Re-liaison des références exercice/série (perdues au JSON.parse du
+      // brouillon) : index d'abord, validé par exerciseId, sinon recherche.
+      let ex = this._session.exercises[saved.rest.exIdx] ?? null;
+      if (saved.rest.exId && ex?.exerciseId !== saved.rest.exId) {
+        ex = this._session.exercises.find(e => e.exerciseId === saved.rest.exId) ?? null;
+      }
+      this._restEx        = ex;
+      this._restSet       = (ex && Number.isInteger(saved.rest.si)) ? (ex.sets[saved.rest.si] ?? null) : null;
+      this._restEndsAt    = saved.rest.endsAt;
+      this._restRemaining = Math.max(0, Math.ceil((saved.rest.endsAt - now) / 1000));
+      this._restTotal     = Math.max(saved.rest.total || 0, this._restRemaining);
+      this._restInterval  = setInterval(() => this._tickRestTimer(), 1000);
+      // Reprogramme la notification système : sans effet si déjà en place,
+      // la restaure après un « Forcer l'arrêt » Android qui purge les alarmes.
+      this._nativeSchedule(NATIVE_NOTIF_REST, this._restEndsAt);
+    }
+
+    if (saved.global?.endsAt > now) {
+      this._globalEndsAt    = saved.global.endsAt;
+      this._globalRemaining = Math.max(0, Math.ceil((saved.global.endsAt - now) / 1000));
+      this._globalTotal     = Math.max(saved.global.total || 0, this._globalRemaining);
+      this._globalInterval  = setInterval(() => this._tickGlobalTimer(), 1000);
+      this._nativeSchedule(NATIVE_NOTIF_GLOBAL, this._globalEndsAt);
+    }
+
+    // Échéances passées pendant la fermeture : la notification a déjà sonné,
+    // on repart proprement.
+    if (!this._restInterval && !this._globalInterval) {
+      try { localStorage.removeItem(TIMERS_KEY); } catch { /* non bloquant */ }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -836,6 +921,7 @@ export default class SessionOverlay {
           this._restInterval = setInterval(() => this._tickRestTimer(), 1000);
         }
         this._nativeSchedule(NATIVE_NOTIF_REST, this._restEndsAt);
+        this._saveTimers();
         this._updateRestTimerDisplay();
         break;
       }
@@ -861,6 +947,7 @@ export default class SessionOverlay {
             this._globalInterval = setInterval(() => this._tickGlobalTimer(), 1000);
           }
           this._nativeSchedule(NATIVE_NOTIF_GLOBAL, this._globalEndsAt);
+          this._saveTimers();
           this._updateGlobalTimerModal();
           this._updateTimerBtn();
         }
@@ -1978,6 +2065,7 @@ export default class SessionOverlay {
     this._globalRemaining = seconds;
     this._globalInterval  = setInterval(() => this._tickGlobalTimer(), 1000);
     this._nativeSchedule(NATIVE_NOTIF_GLOBAL, this._globalEndsAt);
+    this._saveTimers();
     this._updateTimerBtn();
   }
 
@@ -1992,6 +2080,7 @@ export default class SessionOverlay {
     this._globalTotal     = 0;
     this._globalEndsAt    = 0;
     this._nativeCancel(NATIVE_NOTIF_GLOBAL);
+    this._saveTimers();
     document.getElementById('session-timer-modal')?.remove();
     this._updateTimerBtn();
   }
@@ -2007,6 +2096,7 @@ export default class SessionOverlay {
       navigator.vibrate?.([200, 100, 200]);
       this._playBeep(2);
       this._notifyTimerDone();
+      this._saveTimers();
       document.getElementById('session-timer-modal')?.classList.add('timer-modal--done');
       clearTimeout(this._globalDoneTimeout);
       this._globalDoneTimeout = setTimeout(() => {
@@ -2195,6 +2285,7 @@ export default class SessionOverlay {
     this._restRemaining = seconds;
     this._restInterval  = setInterval(() => this._tickRestTimer(), 1000);
     this._nativeSchedule(NATIVE_NOTIF_REST, this._restEndsAt);
+    this._saveTimers();
     this._insertRestTimerBar();
   }
 
@@ -2224,6 +2315,7 @@ export default class SessionOverlay {
     this._restEndsAt    = 0;
     this._restEx        = null;
     this._restSet       = null;
+    this._saveTimers();
     document.getElementById('session-rest-timer')?.remove();
     if (exIdx !== -1) this._reRenderSetsSection(exIdx);
   }
@@ -2242,6 +2334,7 @@ export default class SessionOverlay {
     this._restEndsAt    = 0;
     this._restEx        = null;
     this._restSet       = null;
+    this._saveTimers();
     document.getElementById('session-rest-timer')?.remove();
   }
 
@@ -2255,6 +2348,7 @@ export default class SessionOverlay {
       navigator.vibrate?.([200, 100, 200]);
       this._playBeep(2);
       this._notifyTimerDone();
+      this._saveTimers();
 
       // Mark the timer set as completed (référence directe, index-safe)
       if (this._restSet?.type === 'timer') {
