@@ -159,6 +159,58 @@ public class RestTimerService extends Service {
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return buildPlatformNotification(remaining, total, elapsed, contentIntent);
+        }
+        return buildCompatNotification(remaining, total, elapsed, contentIntent);
+    }
+
+    /**
+     * Construction via le constructeur natif (API 26+), seule voie pour
+     * obtenir la promotion « Live Updates » : NotificationCompat se contente
+     * d'écrire l'extra android.requestPromotedOngoing, que la plateforme
+     * ignore — vérifié en décompilant androidx.core 1.17.
+     */
+    private Notification buildPlatformNotification(int remaining, int total, int elapsed,
+                                                   PendingIntent contentIntent) {
+        Notification.Builder builder = new Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_timer)
+            .setContentTitle(title)
+            .setContentText(body)
+            // Strong place le temps restant en sous-titre : c'est ce que
+            // reprennent la pastille et les capsules.
+            .setSubText(formatRemaining(remaining))
+            .setContentIntent(contentIntent)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setColor(0xFF3DECEC)
+            .setColorized(true)
+            .setCategory(Notification.CATEGORY_STOPWATCH)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setProgress(total, elapsed, false);
+
+        if (Build.VERSION.SDK_INT >= 36) {
+            builder.setShortCriticalText(formatRemaining(remaining));
+            // Absente du SDK 36 contre lequel on compile, présente à
+            // l'exécution sur Android 16+ : appel par réflexion.
+            try {
+                Notification.Builder.class
+                    .getMethod("setRequestPromotedOngoing", boolean.class)
+                    .invoke(builder, true);
+            } catch (Exception ignored) {
+                // Pas de promotion : la notification reste affichée normalement
+            }
+        }
+
+        Notification notification = builder.build();
+        notification.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
+        return notification;
+    }
+
+    /** Repli pour Android 7.x (pas de canaux, pas de promotion). */
+    private Notification buildCompatNotification(int remaining, int total, int elapsed,
+                                                  PendingIntent contentIntent) {
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_timer)
             .setContentTitle(title)
@@ -174,13 +226,7 @@ public class RestTimerService extends Service {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             // La barre de progression est ce que les capsules dessinent en arc
-            .setProgress(total, elapsed, false)
-            // Android 16+ « Live Updates » : demande la promotion en pastille
-            // de barre d'état, avec le temps restant comme texte court. La
-            // promotion doit être demandée par l'API — poser le drapeau
-            // FLAG_PROMOTED_ONGOING à la main est ignoré par le système.
-            .setRequestPromotedOngoing(true)
-            .setShortCriticalText(formatRemaining(remaining));
+            .setProgress(total, elapsed, false);
 
         Notification notification = builder.build();
         notification.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
